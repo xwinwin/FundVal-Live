@@ -154,4 +154,6 @@ flowchart TB
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Ye-Yu-Mo/FundVal-Live&type=Date)](https://star-history.com/#Ye-Yu-Mo/FundVal-Live&Date)
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Ye-Yu-Mo/FundVal-Live&type=date&legend=top-left)](https://www.star-history.com/#Ye-Yu-Mo/FundVal-Live&type=date&legend=top-left)
