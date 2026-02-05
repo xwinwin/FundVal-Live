@@ -1,12 +1,18 @@
 #!/bin/bash
 
+# FundVal Live - Development Mode Startup Script
+# For desktop app users: Download from https://github.com/Ye-Yu-Mo/FundVal-Live/releases
+
 # Colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 RED='\033[0;31m'
+YELLOW='\033[0;33m'
 NC='\033[0m'
 
-echo -e "${GREEN}>>> Starting FundVal Live System...${NC}"
+echo -e "${GREEN}>>> Starting FundVal Live (Development Mode)...${NC}"
+echo -e "${YELLOW}>>> For desktop app, download from Releases page${NC}"
+echo ""
 
 # Create logs directory
 mkdir -p logs backend/data

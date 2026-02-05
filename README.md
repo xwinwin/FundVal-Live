@@ -28,19 +28,54 @@
 
 ## 快速开始
 
-### 方式一：桌面应用（推荐）
+### 方式一：桌面应用（推荐 
 
 **下载安装包，双击即用，无需配置环境**
 
-1. 前往 [Releases](https://github.com/Ye-Yu-Mo/FundVal-Live/releases) 下载最新版本
-   - **macOS**: `FundVal-Live-x.x.x.dmg`
-   - **Windows**: `FundVal-Live-Setup-x.x.x.exe`
-   - **Linux**: `FundVal-Live-x.x.x.AppImage`
+#### 下载
 
-2. 安装并启动
+前往 [Releases](https://github.com/Ye-Yu-Mo/FundVal-Live/releases/latest) 下载最新版本：
 
-3. （可选）配置 AI 分析
-   - 首次启动后，在设置中填入 OpenAI API Key
+| 平台 | 文件 | 说明 |
+|------|------|------|
+| **macOS (Apple Silicon)** | `FundVal-Live-*-arm64.dmg` | M1/M2/M3 芯片 |
+| **macOS (Intel)** | `FundVal-Live-*-x64.dmg` | Intel 芯片 |
+| **Windows** | `FundVal-Live-Setup-*.exe` | 64位系统 |
+| **Linux (AppImage)** | `FundVal-Live-*.AppImage` | 通用格式 |
+| **Linux (Debian/Ubuntu)** | `fundval-live_*_amd64.deb` | deb 包 |
+
+#### 安装
+
+**macOS:**
+1. 下载 `.dmg` 文件
+2. 双击打开，拖动到 Applications
+3. 首次打开如提示"无法验证开发者"：
+   - 打开"系统偏好设置" → "安全性与隐私"
+   - 点击"仍要打开"
+
+**Windows:**
+1. 下载 `.exe` 文件
+2. 双击安装
+3. 如提示 SmartScreen：点击"更多信息" → "仍要运行"
+
+**Linux:**
+```bash
+# AppImage
+chmod +x FundVal-Live-*.AppImage
+./FundVal-Live-*.AppImage
+
+# Debian/Ubuntu
+sudo dpkg -i fundval-live_*_amd64.deb
+```
+
+#### 数据位置
+
+- **数据库**: `~/.fundval-live/data/fund.db`
+- **日志**: `~/.fundval-live/logs/`
+  - `electron.log` - 应用日志
+  - `backend.log` - 后端日志
+
+---
 
 ### 方式二：命令行运行
 
@@ -169,8 +204,6 @@ flowchart TB
 本项目提供的数据与分析仅供技术研究使用，不构成任何投资建议。市场有风险，代码无绝对，交易需谨慎。
 
 ---
-
-## Star History
 
 ## Star History
 

@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# FundVal Live - Build Test Script
+# Tests the complete build process: frontend + backend + Electron packaging
+# Run this before pushing to verify the build works locally
+
 set -e
 
 echo "🧪 Testing Electron build process..."

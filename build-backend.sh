@@ -1,6 +1,9 @@
 #!/bin/bash
 
-# 构建后端可执行文件
+# FundVal Live - Backend Build Script
+# Builds the Python backend into a standalone executable using PyInstaller
+# Used by: GitHub Actions CI/CD and local development
+
 echo "📦 Building backend with PyInstaller..."
 
 # 安装 PyInstaller
