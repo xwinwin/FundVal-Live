@@ -1,5 +1,6 @@
 import os
 import akshare
+import py_mini_racer
 
 block_cipher = None
 
@@ -7,10 +8,22 @@ block_cipher = None
 akshare_path = os.path.dirname(akshare.__file__)
 akshare_data = os.path.join(akshare_path, 'file_fold')
 
+# 获取 py_mini_racer native library 路径
+mini_racer_path = os.path.dirname(py_mini_racer.__file__)
+mini_racer_lib = os.path.join(mini_racer_path, 'libmini_racer.dylib')  # macOS
+if not os.path.exists(mini_racer_lib):
+    mini_racer_lib = os.path.join(mini_racer_path, 'libmini_racer.so')  # Linux
+if not os.path.exists(mini_racer_lib):
+    mini_racer_lib = os.path.join(mini_racer_path, 'mini_racer.dll')  # Windows
+
+binaries_list = []
+if os.path.exists(mini_racer_lib):
+    binaries_list.append((mini_racer_lib, 'py_mini_racer'))
+
 a = Analysis(
     ['backend/run.py'],
     pathex=['backend'],
-    binaries=[],
+    binaries=binaries_list,
     datas=[
         ('backend/app', 'app'),
         (akshare_data, 'akshare/file_fold'),
@@ -47,6 +60,8 @@ a = Analysis(
         'langchain_core.output_parsers',
         'langchain_core.prompts',
         'duckduckgo_search',
+        'py_mini_racer',
+        'mini_racer',
     ],
     hookspath=[],
     hooksconfig={},
