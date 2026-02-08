@@ -42,21 +42,59 @@ export default function App() {
 
         // Parse watchlist
         const watchlistData = JSON.parse(prefs.watchlist || '[]');
-        const seen = new Set();
-        const deduped = watchlistData.filter(fund => {
-          if (seen.has(fund.id)) return false;
-          seen.add(fund.id);
-          return true;
-        });
-        setWatchlist(deduped);
 
-        // Set current account
-        setCurrentAccount(prefs.currentAccount || 1);
+        // If backend has no data, try to migrate from localStorage
+        if (watchlistData.length === 0) {
+          const savedWatchlist = localStorage.getItem('fundval_watchlist');
+          if (savedWatchlist) {
+            try {
+              const parsed = JSON.parse(savedWatchlist);
+              const seen = new Set();
+              const deduped = parsed.filter(fund => {
+                if (seen.has(fund.id)) return false;
+                seen.add(fund.id);
+                return true;
+              });
+              setWatchlist(deduped);
+
+              // Migrate to backend
+              await updatePreferences({ watchlist: savedWatchlist });
+              console.log('Migrated watchlist from localStorage to backend');
+            } catch (parseError) {
+              console.error('Failed to parse localStorage watchlist', parseError);
+            }
+          } else {
+            setWatchlist([]);
+          }
+        } else {
+          const seen = new Set();
+          const deduped = watchlistData.filter(fund => {
+            if (seen.has(fund.id)) return false;
+            seen.add(fund.id);
+            return true;
+          });
+          setWatchlist(deduped);
+        }
+
+        // Set current account (migrate if needed)
+        if (!prefs.currentAccount || prefs.currentAccount === 1) {
+          const savedAccount = localStorage.getItem('fundval_current_account');
+          if (savedAccount) {
+            const accountId = parseInt(savedAccount);
+            setCurrentAccount(accountId);
+            await updatePreferences({ currentAccount: accountId });
+            console.log('Migrated current account from localStorage to backend');
+          } else {
+            setCurrentAccount(prefs.currentAccount || 1);
+          }
+        } else {
+          setCurrentAccount(prefs.currentAccount);
+        }
 
         setPreferencesLoaded(true);
       } catch (e) {
         console.error('Failed to load preferences from backend', e);
-        // Fallback to localStorage for migration
+        // Fallback to localStorage if API completely fails
         try {
           const savedWatchlist = localStorage.getItem('fundval_watchlist');
           const savedAccount = localStorage.getItem('fundval_current_account');
@@ -70,15 +108,10 @@ export default function App() {
               return true;
             });
             setWatchlist(deduped);
-
-            // Migrate to backend
-            await updatePreferences({ watchlist: savedWatchlist });
           }
 
           if (savedAccount) {
-            const accountId = parseInt(savedAccount);
-            setCurrentAccount(accountId);
-            await updatePreferences({ currentAccount: accountId });
+            setCurrentAccount(parseInt(savedAccount));
           }
         } catch (migrationError) {
           console.error('Migration from localStorage failed', migrationError);
