@@ -19,22 +19,44 @@ class AIService:
         # 不在初始化时创建 LLM，而是每次调用时动态创建
         pass
 
-    def _get_prompt_template(self, prompt_id: Optional[int] = None):
+    def _get_prompt_template(self, prompt_id: Optional[int] = None, user_id: Optional[int] = None):
         """
-        Get prompt template from database.
-        If prompt_id is None, use the default template.
+        Get prompt template from database (filtered by user_id).
+        If prompt_id is None, use the default template for the user.
+
+        Args:
+            prompt_id: Specific prompt ID to fetch
+            user_id: User ID for filtering (None for single-user mode)
         """
         conn = get_db_connection()
         cursor = conn.cursor()
 
         if prompt_id:
-            cursor.execute("""
-                SELECT system_prompt, user_prompt FROM ai_prompts WHERE id = ?
-            """, (prompt_id,))
+            # Fetch specific prompt, verify ownership
+            if user_id is None:
+                cursor.execute("""
+                    SELECT system_prompt, user_prompt FROM ai_prompts
+                    WHERE id = ? AND user_id IS NULL
+                """, (prompt_id,))
+            else:
+                cursor.execute("""
+                    SELECT system_prompt, user_prompt FROM ai_prompts
+                    WHERE id = ? AND user_id = ?
+                """, (prompt_id, user_id))
         else:
-            cursor.execute("""
-                SELECT system_prompt, user_prompt FROM ai_prompts WHERE is_default = 1 LIMIT 1
-            """)
+            # Fetch default prompt for user
+            if user_id is None:
+                cursor.execute("""
+                    SELECT system_prompt, user_prompt FROM ai_prompts
+                    WHERE is_default = 1 AND user_id IS NULL
+                    LIMIT 1
+                """)
+            else:
+                cursor.execute("""
+                    SELECT system_prompt, user_prompt FROM ai_prompts
+                    WHERE is_default = 1 AND user_id = ?
+                    LIMIT 1
+                """, (user_id,))
 
         row = cursor.fetchone()
         conn.close()
@@ -117,7 +139,7 @@ class AIService:
             "desc": f"近30日最高{max_nav:.4f}, 最低{min_nav:.4f}, 现价处于{'高位' if position>0.8 else '低位' if position<0.2 else '中位'}区间 ({int(position*100)}%)"
         }
 
-    async def analyze_fund(self, fund_info: Dict[str, Any], prompt_id: Optional[int] = None) -> Dict[str, Any]:
+    async def analyze_fund(self, fund_info: Dict[str, Any], prompt_id: Optional[int] = None, user_id: Optional[int] = None) -> Dict[str, Any]:
         # 每次调用时重新初始化 LLM，支持配置热重载
         llm = self._init_llm()
 
@@ -195,8 +217,8 @@ class AIService:
             "history_summary": history_summary
         }
 
-        # 2. Get prompt template and replace variables
-        prompt_template = self._get_prompt_template(prompt_id)
+        # 2. Get prompt template and replace variables (with user_id filtering)
+        prompt_template = self._get_prompt_template(prompt_id, user_id)
 
         # 3. Invoke LLM
         chain = prompt_template | llm | StrOutputParser()

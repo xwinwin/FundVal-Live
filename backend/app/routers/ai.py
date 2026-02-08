@@ -25,8 +25,16 @@ class PromptModel(BaseModel):
     is_default: bool = False
 
 @router.post("/ai/analyze_fund")
-async def analyze_fund(fund_info: Dict[str, Any] = Body(...), prompt_id: int = Body(None)):
-    return await ai_service.analyze_fund(fund_info, prompt_id=prompt_id)
+async def analyze_fund(
+    fund_info: Dict[str, Any] = Body(...),
+    prompt_id: int = Body(None),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """
+    分析基金（需要认证）
+    """
+    user_id = get_user_id_for_query(current_user)
+    return await ai_service.analyze_fund(fund_info, prompt_id=prompt_id, user_id=user_id)
 
 @router.get("/ai/prompts")
 def get_prompts(current_user: Optional[User] = Depends(get_current_user)):
