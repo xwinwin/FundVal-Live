@@ -103,9 +103,9 @@ class AIService:
                 value = decrypt_value(value)
             settings[key] = value
 
-        api_base = settings.get("OPENAI_API_BASE", "https://api.openai.com/v1")
-        api_key = settings.get("OPENAI_API_KEY", "")
-        model = settings.get("AI_MODEL_NAME", "gpt-3.5-turbo")
+        api_base = settings.get("OPENAI_API_BASE") or "https://api.openai.com/v1"
+        api_key = settings.get("OPENAI_API_KEY") or ""
+        model = settings.get("AI_MODEL_NAME") or "gpt-3.5-turbo"
 
         if not api_key:
             return None
