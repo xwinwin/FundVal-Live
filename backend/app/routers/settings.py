@@ -46,7 +46,6 @@ def get_settings(current_user: Optional[User] = Depends(get_current_user)):
             cursor.execute("SELECT key, value, encrypted FROM settings WHERE user_id = ?", (user_id,))
 
         rows = cursor.fetchall()
-        conn.close()
 
         settings = {}
         for row in rows:
@@ -144,7 +143,6 @@ def update_settings(data: dict = Body(...), current_user: Optional[User] = Depen
                 """, (key, value, encrypted, user_id))
 
         conn.commit()
-        conn.close()
 
         # 重新加载配置（仅单用户模式）
         if user_id is None:
@@ -197,8 +195,6 @@ def get_preferences(current_user: Optional[User] = Depends(get_current_user)):
             cursor.execute("SELECT value FROM settings WHERE user_id = ? AND key = 'user_sort_option'", (user_id,))
             sort_row = cursor.fetchone()
             sort_option = sort_row["value"] if sort_row else None
-
-        conn.close()
 
         return {
             "watchlist": watchlist,
@@ -277,7 +273,6 @@ def update_preferences(data: dict = Body(...), current_user: Optional[User] = De
                 """, (data["sortOption"], user_id))
 
         conn.commit()
-        conn.close()
 
         return {"message": "偏好已保存"}
     except HTTPException:

@@ -49,7 +49,7 @@ def list_accounts(current_user: Optional[User] = Depends(get_current_user)):
             cursor.execute("SELECT * FROM accounts WHERE user_id = ? ORDER BY id", (user_id,))
 
         accounts = [dict(row) for row in cursor.fetchall()]
-        conn.close()
+        
         return {"accounts": accounts}
     except HTTPException:
         raise
@@ -79,7 +79,6 @@ def create_account(data: AccountModel, current_user: Optional[User] = Depends(ge
 
         account_id = cursor.lastrowid
         conn.commit()
-        conn.close()
         return {"id": account_id, "name": data.name}
     except HTTPException:
         raise
@@ -106,7 +105,7 @@ def update_account(
             (data.name, data.description, account_id)
         )
         conn.commit()
-        conn.close()
+        
         return {"status": "ok"}
     except Exception as e:
         if "UNIQUE constraint failed" in str(e):
@@ -134,12 +133,12 @@ def delete_account(account_id: int, current_user: Optional[User] = Depends(get_c
         count = cursor.fetchone()["cnt"]
 
         if count > 0:
-            conn.close()
+            
             raise HTTPException(status_code=400, detail="账户下有持仓，无法删除")
 
         cursor.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
         conn.commit()
-        conn.close()
+        
 
         return {"status": "ok"}
     except HTTPException:
@@ -166,7 +165,7 @@ def get_aggregate_positions(current_user: Optional[User] = Depends(get_current_u
             cursor.execute("SELECT id FROM accounts WHERE user_id = ?", (user_id,))
 
         account_ids = [row["id"] for row in cursor.fetchall()]
-        conn.close()
+        
 
         if not account_ids:
             return {
@@ -201,7 +200,7 @@ def get_aggregate_positions(current_user: Optional[User] = Depends(get_current_u
             account_ids
         )
         rows = cursor.fetchall()
-        conn.close()
+        
 
         # 按基金代码聚合
         code_positions = {}
@@ -417,7 +416,7 @@ def update_positions_nav(
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT code FROM positions WHERE account_id = ? AND shares > 0", (account_id,))
         codes = [row["code"] for row in cursor.fetchall()]
-        conn.close()
+        
 
         if not codes:
             return {"ok": True, "message": "无持仓基金", "updated": 0, "pending": 0, "failed": 0}

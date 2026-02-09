@@ -55,20 +55,14 @@ def get_fund_type(code: str, name: str) -> str:
     Returns:
         Fund type string
     """
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT type FROM funds WHERE code = ?", (code,))
-        row = cursor.fetchone()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT type FROM funds WHERE code = ?", (code,))
+    row = cursor.fetchone()
 
-        if row and row["type"]:
-            return row["type"]
-    except Exception as e:
-        logger.error(f"DB query error for {code}: {e}")
-    finally:
-        if conn:
-            conn.close()
+    if row and row["type"]:
+        return row["type"]
+
 
     # Fallback: simple heuristics based on name
     if "债" in name or "纯债" in name or "固收" in name:
@@ -220,7 +214,6 @@ def get_combined_valuation(code: str) -> Dict[str, Any]:
                     cursor = conn.cursor()
                     cursor.execute("SELECT name FROM funds WHERE code = ?", (code,))
                     row = cursor.fetchone()
-                    conn.close()
                     fund_name = row["name"] if row else code
 
                 return {
@@ -252,7 +245,7 @@ def get_combined_valuation(code: str) -> Dict[str, Any]:
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM funds WHERE code = ?", (code,))
             row = cursor.fetchone()
-            conn.close()
+            
             if row:
                 fund_name = row["name"]
 
@@ -288,33 +281,30 @@ def search_funds(q: str) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    try:
-        cursor.execute("""
-            SELECT code, name, type,
-                CASE
-                    WHEN code = ? THEN 1
-                    WHEN code LIKE ? THEN 2
-                    WHEN name LIKE ? THEN 3
-                    ELSE 4
-                END as relevance
-            FROM funds
-            WHERE code LIKE ? OR name LIKE ?
-            ORDER BY relevance, code
-            LIMIT 30
-        """, (q_clean, prefix_pattern, pattern, pattern, pattern))
+    cursor.execute("""
+        SELECT code, name, type,
+            CASE
+                WHEN code = ? THEN 1
+                WHEN code LIKE ? THEN 2
+                WHEN name LIKE ? THEN 3
+                ELSE 4
+            END as relevance
+        FROM funds
+        WHERE code LIKE ? OR name LIKE ?
+        ORDER BY relevance, code
+        LIMIT 30
+    """, (q_clean, prefix_pattern, pattern, pattern, pattern))
 
-        rows = cursor.fetchall()
+    rows = cursor.fetchall()
 
-        results = []
-        for row in rows:
-            results.append({
-                "id": str(row["code"]),
-                "name": row["name"],
-                "type": row["type"] or "未知"
-            })
-        return results
-    finally:
-        conn.close()
+    results = []
+    for row in rows:
+        results.append({
+            "id": str(row["code"]),
+            "name": row["name"],
+            "type": row["type"] or "未知"
+        })
+    return results
 
 
 def get_eastmoney_pingzhong_data(code: str) -> Dict[str, Any]:
@@ -400,7 +390,6 @@ def _get_fund_info_from_db(code: str) -> Dict[str, Any]:
         cursor = conn.cursor()
         cursor.execute("SELECT name, type FROM funds WHERE code = ?", (code,))
         row = cursor.fetchone()
-        conn.close()
         if row:
             return {"name": row["name"], "type": row["type"]}
     except Exception as e:
@@ -557,7 +546,7 @@ def get_fund_history(code: str, limit: int = 30) -> List[Dict[str, Any]]:
             pass
 
     if cache_valid:
-        conn.close()
+        
         # Reverse to ascending order (oldest to newest) for chart display
         return [{"date": row["date"], "nav": float(row["nav"])} for row in reversed(rows)]
 
@@ -565,7 +554,7 @@ def get_fund_history(code: str, limit: int = 30) -> List[Dict[str, Any]]:
     try:
         df = ak.fund_open_fund_info_em(symbol=code, indicator="单位净值走势")
         if df is None or df.empty:
-            conn.close()
+            
             return []
 
         # If limit < 9999, take only the most recent N records
@@ -589,11 +578,10 @@ def get_fund_history(code: str, limit: int = 30) -> List[Dict[str, Any]]:
             """, (code, date_str, nav_value))
 
         conn.commit()
-        conn.close()
+        
         return results
     except Exception as e:
         logger.error(f"History fetch error for {code}: {e}")
-        conn.close()
         return []
 
 

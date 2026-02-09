@@ -59,7 +59,7 @@ class AIService:
                 """, (user_id,))
 
         row = cursor.fetchone()
-        conn.close()
+        
 
         if not row:
             # Fallback to hardcoded prompt
@@ -94,7 +94,7 @@ class AIService:
             """, (user_id,))
 
         rows = cursor.fetchall()
-        conn.close()
+        
 
         settings = {}
         for row in rows:
@@ -182,13 +182,22 @@ class AIService:
         fund_id = fund_info.get("id")
         fund_name = fund_info.get("name", "未知基金")
 
-        # 1. Gather Data
-        # History (Last 250 days for technical indicators)
+        # 1. Gather Data - Use same data source as frontend for consistency
+        # Get complete fund data including technical indicators (same as frontend display)
+        from ..services.fund import get_fund_intraday
+        fund_detail = get_fund_intraday(fund_id)
+
+        # Extract technical indicators (already calculated by get_fund_intraday)
+        technical_indicators = {
+            "sharpe": fund_detail.get("sharpe", "--"),
+            "volatility": fund_detail.get("volatility", "--"),
+            "max_drawdown": fund_detail.get("max_drawdown", "--"),
+            "annual_return": fund_detail.get("annual_return", "--"),
+        }
+
+        # Get history for trend analysis (use same source as technical indicators)
         history = get_fund_history(fund_id, limit=250)
         indicators = self._calculate_indicators(history[:30] if len(history) >= 30 else history)
-
-        # Calculate technical indicators (Sharpe, Volatility, Max Drawdown)
-        technical_indicators = _calculate_technical_indicators(history)
 
         # 1.5 Data Consistency Check
         consistency_note = ""
@@ -222,10 +231,10 @@ class AIService:
 
         # Prepare variables for template replacement
         holdings_str = ""
-        if fund_info.get("holdings"):
+        if fund_detail.get("holdings"):
             holdings_str = "\n".join([
                 f"- {h['name']}: {h['percent']}% (涨跌: {h['change']:+.2f}%)"
-                for h in fund_info["holdings"][:10]
+                for h in fund_detail["holdings"][:10]
             ])
 
         # Prepare variables for prompt template (support both flat and nested structure)
@@ -233,12 +242,12 @@ class AIService:
             # Flat structure (for backward compatibility)
             "fund_code": fund_id,
             "fund_name": fund_name,
-            "fund_type": fund_info.get("type", "未知"),
-            "manager": fund_info.get("manager", "未知"),
-            "nav": fund_info.get("nav", "--"),
-            "estimate": fund_info.get("estimate", "--"),
-            "est_rate": f"{fund_info.get('estRate', 0)}%",
-            "concentration": fund_info.get("indicators", {}).get("concentration", "--"),
+            "fund_type": fund_detail.get("type", "未知"),
+            "manager": fund_detail.get("manager", "未知"),
+            "nav": fund_detail.get("nav", "--"),
+            "estimate": fund_detail.get("estimate", "--"),
+            "est_rate": f"{fund_detail.get('estRate', 0)}%",
+            "concentration": fund_detail.get("indicators", {}).get("concentration", "--"),
             "holdings": holdings_str or "暂无持仓数据",
             "sharpe": technical_indicators.get("sharpe", "--"),
             "volatility": technical_indicators.get("volatility", "--"),
@@ -250,11 +259,11 @@ class AIService:
             "fund_info": {
                 "code": fund_id,
                 "name": fund_name,
-                "type": fund_info.get("type", "未知"),
-                "manager": fund_info.get("manager", "未知"),
-                "nav": fund_info.get("nav", "--"),
-                "estimate": fund_info.get("estimate", "--"),
-                "est_rate": f"{fund_info.get('estRate', 0)}%",
+                "type": fund_detail.get("type", "未知"),
+                "manager": fund_detail.get("manager", "未知"),
+                "nav": fund_detail.get("nav", "--"),
+                "estimate": fund_detail.get("estimate", "--"),
+                "est_rate": f"{fund_detail.get('estRate', 0)}%",
             },
             "technical_indicators": {
                 "sharpe": technical_indicators.get("sharpe", "--"),
@@ -263,7 +272,7 @@ class AIService:
                 "annual_return": technical_indicators.get("annual_return", "--"),
             },
             "holdings_info": {
-                "concentration": fund_info.get("indicators", {}).get("concentration", "--"),
+                "concentration": fund_detail.get("indicators", {}).get("concentration", "--"),
                 "top_holdings": holdings_str or "暂无持仓数据",
             }
         }

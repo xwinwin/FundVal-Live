@@ -72,15 +72,12 @@ def _get_setting_bool(key: str, default: bool = False) -> bool:
         bool: 配置值
     """
     conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT value FROM settings WHERE key = ? AND user_id IS NULL", (key,))
-        row = cursor.fetchone()
-        if row is None:
-            return default
-        return row[0] == '1'
-    finally:
-        conn.close()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM settings WHERE key = ? AND user_id IS NULL", (key,))
+    row = cursor.fetchone()
+    if row is None:
+        return default
+    return row[0] == '1'
 
 
 def is_multi_user_mode() -> bool:
@@ -197,18 +194,15 @@ def _get_user_by_id(user_id: int) -> Optional[User]:
         Optional[User]: 用户对象，如果不存在则返回 None
     """
     conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, username, is_admin FROM users WHERE id = ?",
-            (user_id,)
-        )
-        row = cursor.fetchone()
-        if row is None:
-            return None
-        return User(id=row[0], username=row[1], is_admin=row[2])
-    finally:
-        conn.close()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, username, is_admin FROM users WHERE id = ?",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    return User(id=row[0], username=row[1], is_admin=row[2])
 
 
 # ============================================================================
