@@ -50,7 +50,7 @@ export const IntradayChart = ({ fundId }) => {
   if (loading) return <div className="h-64 flex items-center justify-center text-slate-400">加载分时数据中...</div>;
   if (error) return <div className="h-64 flex items-center justify-center text-red-400">加载失败: {error}</div>;
   if (!data || !data.snapshots || data.snapshots.length === 0) {
-    return <div className="h-64 flex items-center justify-center text-slate-400">暂无分时数据（仅持仓基金在交易时间采集）</div>;
+    return <div className="h-64 flex items-center justify-center text-slate-400">暂无分时数据（仅在交易时间采集持仓和关注的基金）</div>;
   }
 
   const chartData = data.snapshots.map(s => ({

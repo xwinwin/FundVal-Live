@@ -72,11 +72,40 @@ class AIService:
             ("user", row["user_prompt"])
         ])
 
-    def _init_llm(self, fast_mode=True):
+    def _init_llm(self, fast_mode=True, user_id: Optional[int] = None):
         # 每次调用时重新读取配置，支持热重载
-        api_base = Config.OPENAI_API_BASE
-        api_key = Config.OPENAI_API_KEY
-        model = Config.AI_MODEL_NAME
+        # 按 user_id 读取配置
+        from ..crypto import decrypt_value
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if user_id is None:
+            # 单用户模式：读取 user_id IS NULL 的配置
+            cursor.execute("""
+                SELECT key, value, encrypted FROM settings
+                WHERE user_id IS NULL
+            """)
+        else:
+            # 多用户模式：读取当前用户的配置
+            cursor.execute("""
+                SELECT key, value, encrypted FROM settings
+                WHERE user_id = ?
+            """, (user_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        settings = {}
+        for row in rows:
+            key, value, encrypted = row
+            if encrypted and value:
+                value = decrypt_value(value)
+            settings[key] = value
+
+        api_base = settings.get("OPENAI_API_BASE", "https://api.openai.com/v1")
+        api_key = settings.get("OPENAI_API_KEY", "")
+        model = settings.get("AI_MODEL_NAME", "gpt-3.5-turbo")
 
         if not api_key:
             return None
@@ -141,12 +170,14 @@ class AIService:
 
     async def analyze_fund(self, fund_info: Dict[str, Any], prompt_id: Optional[int] = None, user_id: Optional[int] = None) -> Dict[str, Any]:
         # 每次调用时重新初始化 LLM，支持配置热重载
-        llm = self._init_llm()
+        llm = self._init_llm(user_id=user_id)
 
         if not llm:
             return {
-                "summary": "未配置 LLM API Key，无法进行分析。",
-                "risk_level": "未知",
+                "markdown": "## ⚠️ 配置错误\n\n未配置 OpenAI API Key，请前往设置页面配置。",
+                "indicators": {"status": "未知", "desc": "无法分析"},
+                "timestamp": datetime.datetime.now().strftime("%H:%M:%S")
+            }
                 "analysis_report": "请在设置页面配置 OpenAI API Key 以启用 AI 分析功能。",
                 "timestamp": datetime.datetime.now().strftime("%H:%M:%S")
             }
