@@ -23,11 +23,7 @@
   "build": {
     "appId": "com.fundval.live",
     "productName": "FundVal Live",
-    "publish": {
-      "provider": "github",
-      "owner": "Ye-Yu-Mo",
-      "repo": "FundVal-Live"
-    },
+    "publish": null,
     "directories": {
       "output": "release"
     },
@@ -57,10 +53,9 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": ["arm64"]
         }
       ],
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "electron/entitlements.mac.plist",
