@@ -25,3 +25,38 @@ export const changePassword = (oldPassword, newPassword) =>
     old_password: oldPassword,
     new_password: newPassword,
   });
+
+// 基金管理
+export const fundsAPI = {
+  list: (params) => api.get('/funds/', { params }),
+  get: (code) => api.get(`/funds/${code}/`),
+  getEstimate: (code, source) => api.get(`/funds/${code}/estimate/`, { params: { source } }),
+  getAccuracy: (code) => api.get(`/funds/${code}/accuracy/`),
+};
+
+// 账户管理
+export const accountsAPI = {
+  list: () => api.get('/accounts/'),
+  create: (data) => api.post('/accounts/', data),
+  update: (id, data) => api.put(`/accounts/${id}/`, data),
+  delete: (id) => api.delete(`/accounts/${id}/`),
+};
+
+// 持仓管理
+export const positionsAPI = {
+  list: (accountId) => api.get('/positions/', { params: { account_id: accountId } }),
+  createOperation: (data) => api.post('/positions/operations/', data),
+  listOperations: (params) => api.get('/positions/operations/', { params }),
+};
+
+// 自选列表
+export const watchlistsAPI = {
+  list: () => api.get('/watchlists/'),
+  create: (data) => api.post('/watchlists/', data),
+  get: (id) => api.get(`/watchlists/${id}/`),
+  delete: (id) => api.delete(`/watchlists/${id}/`),
+  addItem: (id, fundId) => api.post(`/watchlists/${id}/items/`, { fund_id: fundId }),
+  removeItem: (id, fundId) => api.delete(`/watchlists/${id}/items/${fundId}/`),
+  reorder: (id, items) => api.put(`/watchlists/${id}/reorder/`, { items }),
+};
+
