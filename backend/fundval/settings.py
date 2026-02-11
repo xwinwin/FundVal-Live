@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'django_celery_results',
+    'django_celery_beat',
     'api',
 ]
 
@@ -163,4 +165,15 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
+
+# Celery 配置
+CELERY_BROKER_URL = 'redis://localhost:6379/0'  # 使用 Redis 作为消息队列
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'  # 使用 Redis 存储任务结果
+CELERY_CACHE_BACKEND = 'django-cache'  # 使用 Django 缓存
+CELERY_TIMEZONE = 'Asia/Shanghai'  # 时区设置
+CELERY_TASK_TRACK_STARTED = True  # 跟踪任务开始状态
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 任务超时时间：30 分钟
+CELERY_ACCEPT_CONTENT = ['json']  # 接受的内容类型
+CELERY_TASK_SERIALIZER = 'json'  # 任务序列化格式
+CELERY_RESULT_SERIALIZER = 'json'  # 结果序列化格式
 

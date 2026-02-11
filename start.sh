@@ -36,8 +36,33 @@ else
     exit 1
 fi
 
+# 检查 Celery 服务
+echo "🔍 检查 Celery 服务..."
+if docker-compose ps celery-worker | grep -q "Up"; then
+    echo "✅ Celery Worker 启动成功！"
+else
+    echo "⚠️  Celery Worker 未启动"
+fi
+
+if docker-compose ps celery-beat | grep -q "Up"; then
+    echo "✅ Celery Beat 启动成功！"
+else
+    echo "⚠️  Celery Beat 未启动"
+fi
+
 echo ""
 echo "🎉 系统启动完成！"
 echo ""
-echo "查看日志: docker-compose logs -f"
+echo "服务列表:"
+echo "  - 后端 API: http://localhost:8000"
+echo "  - PostgreSQL: localhost:5432"
+echo "  - Redis: localhost:6379"
+echo "  - Celery Worker: 运行中"
+echo "  - Celery Beat: 运行中（每天 18:30 更新净值）"
+echo ""
+echo "查看日志: docker-compose logs -f [service]"
+echo "  - 后端: docker-compose logs -f backend"
+echo "  - Worker: docker-compose logs -f celery-worker"
+echo "  - Beat: docker-compose logs -f celery-beat"
+echo ""
 echo "停止服务: docker-compose down"
