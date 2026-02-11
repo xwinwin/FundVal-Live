@@ -17,6 +17,22 @@ class Fund(models.Model):
     yesterday_nav = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
     yesterday_date = models.DateField(null=True, blank=True)
 
+    # 实时估值数据（缓存）
+    estimate_nav = models.DecimalField(
+        max_digits=10, decimal_places=4,
+        null=True, blank=True,
+        help_text='实时估值净值'
+    )
+    estimate_growth = models.DecimalField(
+        max_digits=10, decimal_places=4,
+        null=True, blank=True,
+        help_text='估值涨跌幅（%）'
+    )
+    estimate_time = models.DateTimeField(
+        null=True, blank=True,
+        help_text='估值更新时间'
+    )
+
     # 元数据
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

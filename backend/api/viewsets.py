@@ -9,7 +9,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Sum
+from django.utils import timezone
 from decimal import Decimal
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .models import (
     Fund, Account, Position, PositionOperation,
@@ -126,6 +128,106 @@ class FundViewSet(viewsets.ReadOnlyModelViewSet):
             del data['count']
 
         return Response(result)
+
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def batch_estimate(self, request):
+        """
+        批量获取基金估值（带缓存）
+
+        请求体:
+        {
+            "fund_codes": ["000001", "000002", ...]
+        }
+
+        响应:
+        {
+            "000001": {
+                "fund_code": "000001",
+                "fund_name": "华夏成长",
+                "estimate_nav": "1.2345",
+                "estimate_growth": "1.23",
+                "estimate_time": "2026-02-11T14:30:00Z",
+                "yesterday_nav": "1.2200",
+                "from_cache": true
+            },
+            ...
+        }
+        """
+        fund_codes = request.data.get('fund_codes', [])
+        ttl_minutes = 5  # 缓存有效期 5 分钟
+
+        if not fund_codes:
+            return Response({'error': '缺少 fund_codes 参数'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 查询数据库
+        funds = Fund.objects.filter(fund_code__in=fund_codes)
+        fund_map = {f.fund_code: f for f in funds}
+
+        results = {}
+        need_fetch = []  # 需要从数据源获取的基金
+
+        # 检查缓存
+        now = timezone.now()
+        for code in fund_codes:
+            fund = fund_map.get(code)
+            if not fund:
+                results[code] = {'error': '基金不存在'}
+                continue
+
+            # 检查缓存是否有效
+            if (fund.estimate_nav and fund.estimate_time and
+                (now - fund.estimate_time).total_seconds() < ttl_minutes * 60):
+                # 缓存命中
+                results[code] = {
+                    'fund_code': code,
+                    'fund_name': fund.fund_name,
+                    'estimate_nav': str(fund.estimate_nav),
+                    'estimate_growth': str(fund.estimate_growth) if fund.estimate_growth else None,
+                    'estimate_time': fund.estimate_time.isoformat(),
+                    'yesterday_nav': str(fund.yesterday_nav) if fund.yesterday_nav else None,
+                    'from_cache': True
+                }
+            else:
+                # 缓存失效，需要重新获取
+                need_fetch.append(code)
+
+        # 从数据源获取
+        if need_fetch:
+            source = SourceRegistry.get_source('eastmoney')
+
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futures = {executor.submit(source.fetch_estimate, code): code
+                          for code in need_fetch}
+
+                for future in as_completed(futures):
+                    code = futures[future]
+                    try:
+                        data = future.result()
+                        fund = fund_map.get(code)
+
+                        if fund and data:
+                            # 更新数据库
+                            fund.estimate_nav = data.get('estimate_nav')
+                            fund.estimate_growth = data.get('estimate_growth')
+                            fund.estimate_time = timezone.now()
+                            fund.save(update_fields=['estimate_nav', 'estimate_growth', 'estimate_time'])
+
+                            results[code] = {
+                                'fund_code': code,
+                                'fund_name': fund.fund_name,
+                                'estimate_nav': str(data.get('estimate_nav')),
+                                'estimate_growth': str(data.get('estimate_growth')),
+                                'estimate_time': fund.estimate_time.isoformat(),
+                                'yesterday_nav': str(fund.yesterday_nav) if fund.yesterday_nav else None,
+                                'from_cache': False
+                            }
+                    except Exception as e:
+                        results[code] = {
+                            'fund_code': code,
+                            'error': f'获取估值失败: {str(e)}'
+                        }
+
+        return Response(results)
 
     @action(detail=False, methods=['post'], permission_classes=[IsAdminUser])
     def sync(self, request):
