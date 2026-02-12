@@ -67,8 +67,8 @@ export const watchlistsAPI = {
   create: (data) => api.post('/watchlists/', data),
   get: (id) => api.get(`/watchlists/${id}/`),
   delete: (id) => api.delete(`/watchlists/${id}/`),
-  addItem: (id, fundId) => api.post(`/watchlists/${id}/items/`, { fund_id: fundId }),
-  removeItem: (id, fundId) => api.delete(`/watchlists/${id}/items/${fundId}/`),
+  addItem: (id, fundCode) => api.post(`/watchlists/${id}/items/`, { fund_code: fundCode }),
+  removeItem: (id, fundCode) => api.delete(`/watchlists/${id}/items/${fundCode}/`),
   reorder: (id, items) => api.put(`/watchlists/${id}/reorder/`, { items }),
 };
 

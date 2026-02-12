@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Card, Table, Input, Button, Space, message, Typography } from 'antd';
+import { Card, Table, Input, Button, Space, message, Typography, Modal, Select } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { SearchOutlined, EyeOutlined, StarOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Resizable } from 'react-resizable';
 import 'react-resizable/css/styles.css';
-import { fundsAPI } from '../api';
+import { fundsAPI, watchlistsAPI } from '../api';
 
 const { Text } = Typography;
 
@@ -45,6 +45,12 @@ const FundsPage = () => {
   const [page, setPage] = useState(1);
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
   const pageSize = 10;
+
+  // 自选列表相关状态
+  const [watchlistModalVisible, setWatchlistModalVisible] = useState(false);
+  const [selectedFund, setSelectedFund] = useState(null);
+  const [watchlists, setWatchlists] = useState([]);
+  const [selectedWatchlistId, setSelectedWatchlistId] = useState(null);
 
   // 列宽状态
   const [columnWidths, setColumnWidths] = useState({
@@ -149,8 +155,42 @@ const FundsPage = () => {
     navigate(`/dashboard/funds/${fundCode}`);
   };
 
-  const handleAddToWatchlist = (fund) => {
-    message.info('加入自选功能待实现');
+  const handleAddToWatchlist = async (fund) => {
+    setSelectedFund(fund);
+
+    // 加载自选列表
+    try {
+      const response = await watchlistsAPI.list();
+      setWatchlists(response.data);
+
+      if (response.data.length === 0) {
+        message.warning('请先创建自选列表');
+        navigate('/dashboard/watchlists');
+        return;
+      }
+
+      // 默认选中第一个
+      setSelectedWatchlistId(response.data[0].id);
+      setWatchlistModalVisible(true);
+    } catch (error) {
+      message.error('加载自选列表失败');
+    }
+  };
+
+  // 确认添加到自选
+  const handleConfirmAddToWatchlist = async () => {
+    if (!selectedWatchlistId || !selectedFund) {
+      return;
+    }
+
+    try {
+      await watchlistsAPI.addItem(selectedWatchlistId, selectedFund.fund_code);
+      message.success('添加成功');
+      setWatchlistModalVisible(false);
+    } catch (error) {
+      const errorMsg = error.response?.data?.error || '添加失败';
+      message.error(errorMsg);
+    }
   };
 
   const columns = [
@@ -330,6 +370,28 @@ const FundsPage = () => {
           simple: window.innerWidth < 768,
         }}
       />
+
+      {/* 添加到自选 Modal */}
+      <Modal
+        title="添加到自选列表"
+        open={watchlistModalVisible}
+        onOk={handleConfirmAddToWatchlist}
+        onCancel={() => setWatchlistModalVisible(false)}
+        okText="添加"
+        cancelText="取消"
+      >
+        <p>基金：{selectedFund?.fund_code} - {selectedFund?.fund_name}</p>
+        <Select
+          style={{ width: '100%' }}
+          placeholder="选择自选列表"
+          value={selectedWatchlistId}
+          onChange={setSelectedWatchlistId}
+          options={watchlists.map(w => ({
+            label: w.name,
+            value: w.id,
+          }))}
+        />
+      </Modal>
     </Card>
   );
 };
