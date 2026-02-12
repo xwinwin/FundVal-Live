@@ -438,7 +438,7 @@ class TestBatchRecalculation:
 
     def test_recalculate_account_positions(self, user, fund1, create_child_account):
         """测试重算指定账户的持仓"""
-        from api.models import Account, PositionOperation
+        from api.models import Account, PositionOperation, Position
         from api.services import recalculate_all_positions
 
         account1 = create_child_account(user, '账户1')
@@ -466,10 +466,12 @@ class TestBatchRecalculation:
             nav=Decimal('10'),
         )
 
+        # 创建操作后会自动创建持仓，先删除账户2的持仓来模拟需要重算的场景
+        Position.objects.filter(account=account2).delete()
+
         # 只重算账户1
         recalculate_all_positions(account_id=account1.id)
 
-        from api.models import Position
         # 账户1应该有持仓
         assert Position.objects.filter(account=account1).count() == 1
         # 账户2没有重算，所以没有持仓记录

@@ -56,14 +56,16 @@ class TestEastMoneySource:
 
     @patch('requests.get')
     def test_fetch_estimate_api_error(self, mock_get):
-        """测试 API 错误处理"""
+        """测试 API 错误处理 - 现在返回 None 而不是抛出异常"""
         from api.sources.eastmoney import EastMoneySource
 
         mock_get.side_effect = Exception('Network error')
 
         source = EastMoneySource()
-        with pytest.raises(Exception):
-            source.fetch_estimate('000001')
+        result = source.fetch_estimate('000001')
+
+        # 异常处理后应该返回 None
+        assert result is None
 
     @patch('requests.get')
     def test_fetch_realtime_nav_success(self, mock_get):

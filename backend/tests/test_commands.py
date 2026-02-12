@@ -311,6 +311,9 @@ class TestRecalculatePositionsCommand:
             nav=Decimal('10'),
         )
 
+        # 创建操作后会自动创建持仓，先删除账户2的持仓来模拟需要重算的场景
+        Position.objects.filter(account=account2).delete()
+
         # 执行命令（只重算账户1）
         out = StringIO()
         call_command('recalculate_positions', account_id=str(account1.id), stdout=out)
