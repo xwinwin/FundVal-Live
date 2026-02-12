@@ -48,6 +48,7 @@ export const positionsAPI = {
   list: (accountId) => api.get('/positions/', { params: { account_id: accountId } }),
   createOperation: (data) => api.post('/positions/operations/', data),
   listOperations: (params) => api.get('/positions/operations/', { params }),
+  deleteOperation: (id) => api.delete(`/positions/operations/${id}/`),
 };
 
 // 自选列表
