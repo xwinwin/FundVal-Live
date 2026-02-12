@@ -35,6 +35,7 @@ const PositionsPage = () => {
   const [buildModalVisible, setBuildModalVisible] = useState(false);
   const [buildPositionMode, setBuildPositionMode] = useState('value'); // value, nav
   const [buildForm] = Form.useForm();
+  const [selectedFundInfo, setSelectedFundInfo] = useState(null); // 选中的基金信息
 
   // 加仓/减仓 Modal 状态
   const [operationModalVisible, setOperationModalVisible] = useState(false);
@@ -81,7 +82,42 @@ const PositionsPage = () => {
     setLoading(true);
     try {
       const response = await positionsAPI.list(accountId);
-      setPositions(response.data);
+      const positionsData = response.data;
+      setPositions(positionsData);
+
+      // 自动刷新持仓中基金的净值和估值
+      if (positionsData.length > 0) {
+        const fundCodes = positionsData.map(p => p.fund_code);
+        try {
+          const [navsResponse, estimatesResponse] = await Promise.all([
+            fundsAPI.batchUpdateNav(fundCodes),
+            fundsAPI.batchEstimate(fundCodes),
+          ]);
+
+          // 更新持仓列表中的基金数据
+          const updatedPositions = positionsData.map(position => {
+            const navData = navsResponse.data[position.fund_code];
+            const estimateData = estimatesResponse.data[position.fund_code];
+
+            return {
+              ...position,
+              fund: {
+                ...position.fund,
+                latest_nav: navData?.latest_nav || position.fund?.latest_nav,
+                latest_nav_date: navData?.latest_nav_date || position.fund?.latest_nav_date,
+                estimate_nav: estimateData?.estimate_nav || position.fund?.estimate_nav,
+                estimate_growth: estimateData?.estimate_growth || position.fund?.estimate_growth,
+                estimate_time: estimateData?.estimate_time || position.fund?.estimate_time,
+              },
+            };
+          });
+
+          setPositions(updatedPositions);
+        } catch (error) {
+          console.error('刷新基金数据失败:', error);
+          // 不影响主流程，继续显示持仓
+        }
+      }
     } catch (error) {
       console.error('加载持仓列表失败:', error);
       message.error(error.response?.data?.message || '加载持仓列表失败，请稍后重试');
@@ -235,6 +271,7 @@ const PositionsPage = () => {
     setBuildPositionMode('value');
     setFundOptions([]);
     setSearchKeyword('');
+    setSelectedFundInfo(null);
     setBuildModalVisible(true);
   };
 
@@ -287,14 +324,49 @@ const PositionsPage = () => {
     if (!option.fund) return;
 
     const fund = option.fund;
-    if (fund.latest_nav) {
-      buildForm.setFieldsValue({
-        nav: parseFloat(fund.latest_nav),
+
+    // 获取最新净值和估值
+    try {
+      const [navResponse, estimateResponse] = await Promise.all([
+        fundsAPI.batchUpdateNav([fund.fund_code]),
+        fundsAPI.batchEstimate([fund.fund_code]),
+      ]);
+
+      const navData = navResponse.data[fund.fund_code];
+      const estimateData = estimateResponse.data[fund.fund_code];
+
+      // 更新选中的基金信息
+      setSelectedFundInfo({
+        fund_code: fund.fund_code,
+        fund_name: fund.fund_name,
+        latest_nav: navData?.latest_nav || fund.latest_nav,
+        latest_nav_date: navData?.latest_nav_date,
+        estimate_nav: estimateData?.estimate_nav,
+        estimate_growth: estimateData?.estimate_growth,
+        estimate_time: estimateData?.estimate_time,
       });
 
-      // 如果是净值+份额模式，自动计算金额
-      if (buildPositionMode === 'nav') {
-        handleBuildNavModeCalculate();
+      // 自动填充净值
+      const latestNav = navData?.latest_nav || fund.latest_nav;
+      if (latestNav) {
+        buildForm.setFieldsValue({
+          nav: parseFloat(latestNav),
+        });
+
+        // 如果是净值+份额模式，自动计算金额
+        if (buildPositionMode === 'nav') {
+          handleBuildNavModeCalculate();
+        }
+      }
+    } catch (error) {
+      console.error('获取基金信息失败:', error);
+      message.warning('获取基金最新信息失败，请手动输入净值');
+
+      // 降级：使用搜索结果中的净值
+      if (fund.latest_nav) {
+        buildForm.setFieldsValue({
+          nav: parseFloat(fund.latest_nav),
+        });
       }
     }
   };
@@ -327,6 +399,18 @@ const PositionsPage = () => {
       await positionsAPI.createOperation(data);
       message.success('建仓成功');
       setBuildModalVisible(false);
+
+      // 立即刷新该基金的净值和估值
+      try {
+        await Promise.all([
+          fundsAPI.batchUpdateNav([values.fund_code]),
+          fundsAPI.batchEstimate([values.fund_code]),
+        ]);
+      } catch (error) {
+        console.error('刷新基金数据失败:', error);
+        // 不影响主流程
+      }
+
       loadPositions(selectedAccountId);
       loadOperations(selectedAccountId);
     } catch (error) {
@@ -361,6 +445,18 @@ const PositionsPage = () => {
       await positionsAPI.createOperation(data);
       message.success(operationType === 'BUY' ? '加仓成功' : '减仓成功');
       setOperationModalVisible(false);
+
+      // 立即刷新该基金的净值和估值
+      try {
+        await Promise.all([
+          fundsAPI.batchUpdateNav([selectedPosition.fund_code]),
+          fundsAPI.batchEstimate([selectedPosition.fund_code]),
+        ]);
+      } catch (error) {
+        console.error('刷新基金数据失败:', error);
+        // 不影响主流程
+      }
+
       loadPositions(selectedAccountId);
       loadOperations(selectedAccountId);
     } catch (error) {
@@ -842,6 +938,42 @@ const PositionsPage = () => {
               popupMatchSelectWidth={true}
             />
           </Form.Item>
+
+          {/* 显示选中基金的信息 */}
+          {selectedFundInfo && (
+            <Card size="small" style={{ marginBottom: 16, backgroundColor: '#f5f5f5' }}>
+              <div style={{ fontSize: '12px' }}>
+                <div><strong>{selectedFundInfo.fund_name}</strong> ({selectedFundInfo.fund_code})</div>
+                <div style={{ marginTop: 8 }}>
+                  <span>最新净值: </span>
+                  <span style={{ fontWeight: 'bold' }}>
+                    {selectedFundInfo.latest_nav || '-'}
+                  </span>
+                  {selectedFundInfo.latest_nav_date && (
+                    <span style={{ color: '#999', marginLeft: 8 }}>
+                      ({formatDate(selectedFundInfo.latest_nav_date)})
+                    </span>
+                  )}
+                </div>
+                {selectedFundInfo.estimate_nav && (
+                  <div style={{ marginTop: 4 }}>
+                    <span>估算净值: </span>
+                    <span style={{ fontWeight: 'bold' }}>
+                      {selectedFundInfo.estimate_nav}
+                    </span>
+                    {selectedFundInfo.estimate_growth && (
+                      <span style={{
+                        color: parseFloat(selectedFundInfo.estimate_growth) >= 0 ? '#ff4d4f' : '#52c41a',
+                        marginLeft: 8
+                      }}>
+                        ({parseFloat(selectedFundInfo.estimate_growth) >= 0 ? '+' : ''}{selectedFundInfo.estimate_growth}%)
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
 
           <Form.Item label="建仓方式">
             <Radio.Group value={buildPositionMode} onChange={(e) => setBuildPositionMode(e.target.value)}>
