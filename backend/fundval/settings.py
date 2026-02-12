@@ -142,8 +142,8 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 FRONTEND_BUILD_DIR = BASE_DIR.parent / 'frontend' / 'dist'
 
 STATICFILES_DIRS = [
-    FRONTEND_BUILD_DIR / 'assets',
-] if (FRONTEND_BUILD_DIR / 'assets').exists() else []
+    FRONTEND_BUILD_DIR,
+] if FRONTEND_BUILD_DIR.exists() else []
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
