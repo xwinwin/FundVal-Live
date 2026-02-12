@@ -37,6 +37,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
 
-    # 前端路由（必须放在最后）
-    re_path(r'^(?!api/).*$', serve_frontend),
+    # 前端路由（catch-all，必须放在最后）
+    re_path(r'^(?!api/)(?P<path>.*)$', serve_frontend, name='frontend'),
 ]
