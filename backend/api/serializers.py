@@ -5,6 +5,7 @@
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from datetime import date
 from .models import (
     Fund, Account, Position, PositionOperation,
     Watchlist, WatchlistItem, EstimateAccuracy, FundNavHistory
@@ -260,3 +261,17 @@ class FundNavHistorySerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = fields
+
+
+class QueryNavSerializer(serializers.Serializer):
+    """查询持仓操作净值序列化器"""
+
+    fund_code = serializers.CharField(max_length=10)
+    operation_date = serializers.DateField()
+    before_15 = serializers.BooleanField()
+
+    def validate_operation_date(self, value):
+        """验证操作日期不能是未来"""
+        if value > date.today():
+            raise serializers.ValidationError('操作日期不能是未来')
+        return value

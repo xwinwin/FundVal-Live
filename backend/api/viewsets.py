@@ -20,7 +20,7 @@ from .models import (
 from .serializers import (
     FundSerializer, AccountSerializer, PositionSerializer,
     PositionOperationSerializer, WatchlistSerializer, UserRegisterSerializer,
-    FundNavHistorySerializer
+    FundNavHistorySerializer, QueryNavSerializer
 )
 from .sources import SourceRegistry
 from .services import recalculate_all_positions
@@ -293,6 +293,77 @@ class FundViewSet(viewsets.ReadOnlyModelViewSet):
                     }
 
         return Response(results)
+
+    @action(detail=False, methods=['post'])
+    def query_nav(self, request):
+        """
+        查询持仓操作净值
+
+        POST /api/funds/query_nav/
+        {
+            "fund_code": "000001",
+            "operation_date": "2024-01-15",
+            "before_15": true
+        }
+
+        响应：
+        {
+            "fund_code": "000001",
+            "fund_name": "华夏成长混合",
+            "nav": "1.2345",
+            "nav_date": "2024-01-14",
+            "source": "history"  // 或 "latest"
+        }
+        """
+        from datetime import timedelta
+        from .utils.trading_calendar import get_last_trading_day
+
+        serializer = QueryNavSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        fund_code = serializer.validated_data['fund_code']
+        operation_date = serializer.validated_data['operation_date']
+        before_15 = serializer.validated_data['before_15']
+
+        # 1. 获取基金
+        fund = get_object_or_404(Fund, fund_code=fund_code)
+
+        # 2. 计算查询日期
+        if before_15:
+            query_date = get_last_trading_day(operation_date - timedelta(days=1))
+        else:
+            query_date = get_last_trading_day(operation_date)
+
+        # 3. 查询历史净值
+        nav_history = FundNavHistory.objects.filter(
+            fund=fund,
+            nav_date=query_date
+        ).first()
+
+        if nav_history:
+            return Response({
+                'fund_code': fund_code,
+                'fund_name': fund.fund_name,
+                'nav': str(nav_history.unit_nav),
+                'nav_date': str(nav_history.nav_date),
+                'source': 'history'
+            })
+
+        # 4. fallback 到 Fund.latest_nav
+        if fund.latest_nav:
+            return Response({
+                'fund_code': fund_code,
+                'fund_name': fund.fund_name,
+                'nav': str(fund.latest_nav),
+                'nav_date': str(fund.latest_nav_date) if fund.latest_nav_date else None,
+                'source': 'latest'
+            })
+
+        # 5. 没有数据
+        return Response(
+            {'error': '净值数据未找到'},
+            status=status.HTTP_404_NOT_FOUND
+        )
 
     @action(detail=False, methods=['post'], permission_classes=[IsAdminUser])
     def sync(self, request):
