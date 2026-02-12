@@ -22,6 +22,7 @@ import {
 import { RollbackOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons';
 import { positionsAPI, fundsAPI } from '../api';
 import { useAccounts } from '../contexts/AccountContext';
+import PositionCharts from '../components/PositionCharts';
 
 const PositionsPage = () => {
   const {
@@ -898,6 +899,9 @@ const PositionsPage = () => {
           </Col>
         </Row>
       </Card>
+
+      {/* 数据可视化 */}
+      <PositionCharts positions={positions} />
 
       <Card
         title="持仓列表"
