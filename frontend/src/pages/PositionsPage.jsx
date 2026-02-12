@@ -19,7 +19,7 @@ import {
   InputNumber,
   AutoComplete,
 } from 'antd';
-import { RollbackOutlined, PlusOutlined } from '@ant-design/icons';
+import { RollbackOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons';
 import { accountsAPI, positionsAPI, fundsAPI } from '../api';
 
 const PositionsPage = () => {
@@ -30,12 +30,21 @@ const PositionsPage = () => {
   const [loading, setLoading] = useState(false);
   const [operationsLoading, setOperationsLoading] = useState(false);
   const [fundTypeFilter, setFundTypeFilter] = useState('all');
-  const [modalVisible, setModalVisible] = useState(false);
-  const [operationType, setOperationType] = useState('BUY'); // BUY, SELL
+
+  // 建仓 Modal 状态
+  const [buildModalVisible, setBuildModalVisible] = useState(false);
   const [buildPositionMode, setBuildPositionMode] = useState('value'); // value, nav
+  const [buildForm] = Form.useForm();
+
+  // 加仓/减仓 Modal 状态
+  const [operationModalVisible, setOperationModalVisible] = useState(false);
+  const [operationType, setOperationType] = useState('BUY'); // BUY, SELL
+  const [selectedPosition, setSelectedPosition] = useState(null);
+  const [operationForm] = Form.useForm();
+
   const [fundOptions, setFundOptions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [form] = Form.useForm();
+  const [searchKeyword, setSearchKeyword] = useState('');
 
   // 加载账户列表
   const loadAccounts = async () => {
@@ -195,24 +204,41 @@ const PositionsPage = () => {
   // 获取操作类型标签
   const getOperationTypeTag = (type) => {
     const typeMap = {
-      'BUY': { text: '买入', color: 'green' },
-      'SELL': { text: '卖出', color: 'red' },
+      'BUY': { text: '买入', color: 'red' },
+      'SELL': { text: '卖出', color: 'green' },
     };
     const config = typeMap[type] || { text: type, color: 'default' };
     return <Tag color={config.color}>{config.text}</Tag>;
   };
 
-  // 打开添加操作 Modal
-  const handleOpenModal = () => {
-    form.resetFields();
-    setOperationType('BUY');
+  // 打开建仓 Modal
+  const handleOpenBuildModal = () => {
+    buildForm.resetFields();
     setBuildPositionMode('value');
     setFundOptions([]);
-    setModalVisible(true);
+    setSearchKeyword('');
+    setBuildModalVisible(true);
+  };
+
+  // 打开加仓/减仓 Modal
+  const handleOpenOperationModal = (position) => {
+    operationForm.resetFields();
+    setSelectedPosition(position);
+    setOperationType('BUY');
+    setOperationModalVisible(true);
+
+    // 自动填充基金信息和净值
+    if (position.fund?.latest_nav) {
+      operationForm.setFieldsValue({
+        nav: parseFloat(position.fund.latest_nav),
+      });
+    }
   };
 
   // 搜索基金
   const handleFundSearch = async (keyword) => {
+    setSearchKeyword(keyword);
+
     if (!keyword || keyword.length < 2) {
       setFundOptions([]);
       return;
@@ -221,7 +247,10 @@ const PositionsPage = () => {
     setSearchLoading(true);
     try {
       const response = await fundsAPI.search(keyword);
-      const options = response.data.map(fund => ({
+      // API 返回分页格式：{count, results}
+      const funds = response.data.results || [];
+
+      const options = funds.map(fund => ({
         value: fund.fund_code,
         label: `${fund.fund_code} - ${fund.fund_name}`,
         fund: fund,
@@ -235,36 +264,74 @@ const PositionsPage = () => {
     }
   };
 
-  // 选择基金后自动填充净值
-  const handleFundSelect = async (value, option) => {
+  // 选择基金后自动填充净值（建仓用）
+  const handleBuildFundSelect = async (value, option) => {
     if (!option.fund) return;
 
     const fund = option.fund;
     if (fund.latest_nav) {
-      form.setFieldsValue({
+      buildForm.setFieldsValue({
         nav: parseFloat(fund.latest_nav),
       });
 
-      // 如果是加仓模式，自动计算份额
-      if (operationType === 'BUY' && buildPositionMode === 'nav') {
-        handleNavModeCalculate();
-      }
-      // 如果是减仓模式，自动计算金额
-      if (operationType === 'SELL') {
-        handleSellCalculate();
+      // 如果是净值+份额模式，自动计算金额
+      if (buildPositionMode === 'nav') {
+        handleBuildNavModeCalculate();
       }
     }
   };
 
-  // 提交操作
-  const handleSubmit = async () => {
+  // 提交建仓操作
+  const handleBuildSubmit = async () => {
     try {
-      const values = await form.validateFields();
+      const values = await buildForm.validateFields();
+
+      // 检查基金是否已有持仓
+      const existingPosition = positions.find(p => p.fund_code === values.fund_code);
+      if (existingPosition) {
+        message.error('该基金已有持仓，请使用加仓功能');
+        return;
+      }
+
+      // 构造提交数据（建仓默认当前时间，15:00前）
+      const now = new Date();
+      const data = {
+        account: selectedAccountId,
+        fund_code: values.fund_code,
+        operation_type: 'BUY',
+        operation_date: now.toISOString().split('T')[0],
+        before_15: true,
+        amount: values.amount,
+        share: values.share,
+        nav: values.nav,
+      };
+
+      await positionsAPI.createOperation(data);
+      message.success('建仓成功');
+      setBuildModalVisible(false);
+      loadPositions(selectedAccountId);
+      loadOperations(selectedAccountId);
+    } catch (error) {
+      if (error.errorFields) {
+        return;
+      }
+      console.error('建仓失败:', error);
+      const errorMsg = error.response?.data?.message ||
+                       error.response?.data?.fund_code?.[0] ||
+                       '建仓失败，请检查输入信息';
+      message.error(errorMsg);
+    }
+  };
+
+  // 提交加仓/减仓操作
+  const handleOperationSubmit = async () => {
+    try {
+      const values = await operationForm.validateFields();
 
       // 构造提交数据
       const data = {
         account: selectedAccountId,
-        fund_code: values.fund_code,
+        fund_code: selectedPosition.fund_code,
         operation_type: operationType,
         operation_date: values.operation_date.format('YYYY-MM-DD'),
         before_15: values.before_15 === 'before',
@@ -274,34 +341,49 @@ const PositionsPage = () => {
       };
 
       await positionsAPI.createOperation(data);
-      message.success('操作添加成功');
-      setModalVisible(false);
+      message.success(operationType === 'BUY' ? '加仓成功' : '减仓成功');
+      setOperationModalVisible(false);
       loadPositions(selectedAccountId);
       loadOperations(selectedAccountId);
     } catch (error) {
       if (error.errorFields) {
         return;
       }
-      console.error('操作添加失败:', error);
+      console.error('操作失败:', error);
       const errorMsg = error.response?.data?.message ||
                        error.response?.data?.fund_code?.[0] ||
-                       '操作添加失败，请检查输入信息';
+                       '操作失败，请检查输入信息';
       message.error(errorMsg);
     }
   };
 
-  // 建仓方式 1：根据市值和收益率计算
-  const handleValueModeCalculate = () => {
-    const holdingValue = form.getFieldValue('holding_value');
-    const pnlRate = form.getFieldValue('pnl_rate');
+  // 建仓方式 1：根据市值和收益金额计算
+  const handleBuildValueModeCalculate = () => {
+    const holdingValue = buildForm.getFieldValue('holding_value');
+    const pnlAmount = buildForm.getFieldValue('pnl_amount');
 
-    if (!holdingValue || pnlRate === undefined) return;
+    if (holdingValue === undefined || pnlAmount === undefined) return;
 
-    const cost = holdingValue / (1 + pnlRate / 100);
-    const nav = holdingValue / 1000; // 假设份额为 1000，可调整
-    const share = 1000;
+    // 成本 = 持有市值 - 收益金额
+    const cost = holdingValue - pnlAmount;
+    if (cost <= 0) {
+      message.warning('收益金额不能大于或等于持有市值');
+      return;
+    }
 
-    form.setFieldsValue({
+    // 获取最新净值（从选中的基金）
+    const fundCode = buildForm.getFieldValue('fund_code');
+    const selectedFund = fundOptions.find(opt => opt.value === fundCode);
+    if (!selectedFund || !selectedFund.fund.latest_nav) {
+      message.warning('请先选择基金以获取最新净值');
+      return;
+    }
+
+    const nav = parseFloat(selectedFund.fund.latest_nav);
+    // 份额 = 持有市值 / 净值
+    const share = holdingValue / nav;
+
+    buildForm.setFieldsValue({
       amount: cost.toFixed(2),
       share: share.toFixed(4),
       nav: nav.toFixed(4),
@@ -309,40 +391,40 @@ const PositionsPage = () => {
   };
 
   // 建仓方式 2：根据净值和份额计算
-  const handleNavModeCalculate = () => {
-    const nav = form.getFieldValue('nav');
-    const share = form.getFieldValue('share');
+  const handleBuildNavModeCalculate = () => {
+    const nav = buildForm.getFieldValue('nav');
+    const share = buildForm.getFieldValue('share');
 
     if (!nav || !share) return;
 
     const amount = nav * share;
-    form.setFieldsValue({
+    buildForm.setFieldsValue({
       amount: amount.toFixed(2),
     });
   };
 
   // 加仓：根据金额和净值计算份额
-  const handleBuyCalculate = () => {
-    const amount = form.getFieldValue('amount');
-    const nav = form.getFieldValue('nav');
+  const handleOperationBuyCalculate = () => {
+    const amount = operationForm.getFieldValue('amount');
+    const nav = operationForm.getFieldValue('nav');
 
     if (!amount || !nav) return;
 
     const share = amount / nav;
-    form.setFieldsValue({
+    operationForm.setFieldsValue({
       share: share.toFixed(4),
     });
   };
 
   // 减仓：根据份额和净值计算金额
-  const handleSellCalculate = () => {
-    const share = form.getFieldValue('share');
-    const nav = form.getFieldValue('nav');
+  const handleOperationSellCalculate = () => {
+    const share = operationForm.getFieldValue('share');
+    const nav = operationForm.getFieldValue('nav');
 
     if (!share || !nav) return;
 
     const amount = share * nav;
-    form.setFieldsValue({
+    operationForm.setFieldsValue({
       amount: amount.toFixed(2),
     });
   };
@@ -486,7 +568,7 @@ const PositionsPage = () => {
       render: (value) => {
         const num = parseFloat(value || 0);
         return (
-          <span style={{ color: num >= 0 ? '#52c41a' : '#ff4d4f' }}>
+          <span style={{ color: num >= 0 ? '#ff4d4f' : '#52c41a' }}>
             {formatMoney(value)}
           </span>
         );
@@ -502,7 +584,7 @@ const PositionsPage = () => {
         if (cost === 0) return '-';
         const rate = pnl / cost;
         return (
-          <span style={{ color: rate >= 0 ? '#52c41a' : '#ff4d4f' }}>
+          <span style={{ color: rate >= 0 ? '#ff4d4f' : '#52c41a' }}>
             {formatPercent(rate)}
           </span>
         );
@@ -531,7 +613,7 @@ const PositionsPage = () => {
         const estimateValue = parseFloat(record.holding_share || 0) * parseFloat(estimateNav);
         const pnl = estimateValue - parseFloat(record.holding_cost || 0);
         return (
-          <span style={{ color: pnl >= 0 ? '#52c41a' : '#ff4d4f' }}>
+          <span style={{ color: pnl >= 0 ? '#ff4d4f' : '#52c41a' }}>
             {formatMoney(pnl)}
           </span>
         );
@@ -548,12 +630,28 @@ const PositionsPage = () => {
         if (!latestNav || !estimateNav) return '-';
         const todayPnl = parseFloat(record.holding_share || 0) * (parseFloat(estimateNav) - parseFloat(latestNav));
         return (
-          <span style={{ color: todayPnl >= 0 ? '#52c41a' : '#ff4d4f' }}>
+          <span style={{ color: todayPnl >= 0 ? '#ff4d4f' : '#52c41a' }}>
             {formatMoney(todayPnl)}
           </span>
         );
       },
       responsive: ['lg'],
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 100,
+      fixed: 'right',
+      render: (_, record) => (
+        <Button
+          type="link"
+          size="small"
+          icon={<EditOutlined />}
+          onClick={() => handleOpenOperationModal(record)}
+        >
+          编辑
+        </Button>
+      ),
     },
   ];
 
@@ -607,7 +705,7 @@ const PositionsPage = () => {
               title="总盈亏"
               value={statistics.pnl}
               prefix="¥"
-              valueStyle={{ color: parseFloat(statistics.pnl) >= 0 ? '#52c41a' : '#ff4d4f' }}
+              styles={{ value: { color: parseFloat(statistics.pnl) >= 0 ? '#ff4d4f' : '#52c41a' } }}
               suffix={statistics.pnl_rate ? `(${formatPercent(statistics.pnl_rate)})` : ''}
             />
           </Col>
@@ -616,14 +714,25 @@ const PositionsPage = () => {
               title="今日盈亏"
               value={statistics.today_pnl}
               prefix="¥"
-              valueStyle={{ color: parseFloat(statistics.today_pnl) >= 0 ? '#52c41a' : '#ff4d4f' }}
+              styles={{ value: { color: parseFloat(statistics.today_pnl) >= 0 ? '#ff4d4f' : '#52c41a' } }}
               suffix={statistics.today_pnl_rate ? `(${formatPercent(statistics.today_pnl_rate)})` : ''}
             />
           </Col>
         </Row>
       </Card>
 
-      <Card title="持仓列表">
+      <Card
+        title="持仓列表"
+        extra={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleOpenBuildModal}
+          >
+            建仓
+          </Button>
+        }
+      >
         <Radio.Group
           value={fundTypeFilter}
           onChange={(e) => setFundTypeFilter(e.target.value)}
@@ -658,15 +767,7 @@ const PositionsPage = () => {
         />
       </Card>
 
-      <Card title="操作流水" style={{ marginTop: 16 }} extra={
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleOpenModal}
-        >
-          添加操作
-        </Button>
-      }>
+      <Card title="操作流水" style={{ marginTop: 16 }}>
         <Table
           columns={operationColumns}
           dataSource={operations}
@@ -682,17 +783,158 @@ const PositionsPage = () => {
         />
       </Card>
 
+      {/* 建仓 Modal */}
       <Modal
-        title="添加操作"
-        open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
+        title="建仓"
+        open={buildModalVisible}
+        onOk={handleBuildSubmit}
+        onCancel={() => setBuildModalVisible(false)}
         okText="确定"
         cancelText="取消"
         width={600}
       >
         <Form
-          form={form}
+          form={buildForm}
+          layout="vertical"
+        >
+          <Form.Item
+            label="基金代码或基金名称"
+            name="fund_code"
+            rules={[{ required: true, message: '请输入基金代码或基金名称' }]}
+          >
+            <AutoComplete
+              options={fundOptions}
+              onSearch={handleFundSearch}
+              onSelect={handleBuildFundSelect}
+              placeholder={searchKeyword ? '' : '输入基金代码或基金名称搜索（至少2个字符）'}
+              loading={searchLoading}
+              style={{ width: '100%' }}
+              popupMatchSelectWidth={true}
+            />
+          </Form.Item>
+
+          <Form.Item label="建仓方式">
+            <Radio.Group value={buildPositionMode} onChange={(e) => setBuildPositionMode(e.target.value)}>
+              <Radio.Button value="value">持有市值 + 收益金额</Radio.Button>
+              <Radio.Button value="nav">净值 + 份额</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+
+          {buildPositionMode === 'value' ? (
+            <>
+              <Form.Item
+                label="持有市值"
+                name="holding_value"
+                rules={[{ required: true, message: '请输入持有市值' }]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="请输入持有市值"
+                  min={0}
+                  onChange={handleBuildValueModeCalculate}
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="收益金额"
+                name="pnl_amount"
+                rules={[{ required: true, message: '请输入收益金额' }]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="请输入收益金额（可为负数）"
+                  onChange={handleBuildValueModeCalculate}
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="成本（自动计算）"
+                name="amount"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="自动计算"
+                  disabled
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="份额（自动计算）"
+                name="share"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="自动计算"
+                  disabled
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="净值（自动计算）"
+                name="nav"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="自动计算"
+                  disabled
+                />
+              </Form.Item>
+            </>
+          ) : (
+            <>
+              <Form.Item
+                label="净值"
+                name="nav"
+                rules={[{ required: true, message: '请输入净值' }]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="请输入净值"
+                  min={0}
+                  onChange={handleBuildNavModeCalculate}
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="份额"
+                name="share"
+                rules={[{ required: true, message: '请输入份额' }]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="请输入份额"
+                  min={0}
+                  onChange={handleBuildNavModeCalculate}
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="金额（自动计算）"
+                name="amount"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="自动计算"
+                  disabled
+                />
+              </Form.Item>
+            </>
+          )}
+        </Form>
+      </Modal>
+
+      {/* 加仓/减仓 Modal */}
+      <Modal
+        title={`${operationType === 'BUY' ? '加仓' : '减仓'} - ${selectedPosition?.fund_name || ''}`}
+        open={operationModalVisible}
+        onOk={handleOperationSubmit}
+        onCancel={() => setOperationModalVisible(false)}
+        okText="确定"
+        cancelText="取消"
+        width={600}
+      >
+        <Form
+          form={operationForm}
           layout="vertical"
           initialValues={{
             before_15: 'before',
@@ -700,23 +942,9 @@ const PositionsPage = () => {
         >
           <Form.Item label="操作类型">
             <Radio.Group value={operationType} onChange={(e) => setOperationType(e.target.value)}>
-              <Radio.Button value="BUY">买入</Radio.Button>
-              <Radio.Button value="SELL">卖出</Radio.Button>
+              <Radio.Button value="BUY">加仓</Radio.Button>
+              <Radio.Button value="SELL">减仓</Radio.Button>
             </Radio.Group>
-          </Form.Item>
-
-          <Form.Item
-            label="基金代码"
-            name="fund_code"
-            rules={[{ required: true, message: '请输入基金代码' }]}
-          >
-            <AutoComplete
-              options={fundOptions}
-              onSearch={handleFundSearch}
-              onSelect={handleFundSelect}
-              placeholder="请输入基金代码或名称搜索"
-              loading={searchLoading}
-            />
           </Form.Item>
 
           <Form.Item
@@ -738,125 +966,18 @@ const PositionsPage = () => {
             </Radio.Group>
           </Form.Item>
 
-          {operationType === 'BUY' && (
+          {operationType === 'BUY' ? (
             <>
-              <Form.Item label="建仓方式">
-                <Radio.Group value={buildPositionMode} onChange={(e) => setBuildPositionMode(e.target.value)}>
-                  <Radio.Button value="value">持有市值 + 收益率</Radio.Button>
-                  <Radio.Button value="nav">净值 + 份额</Radio.Button>
-                </Radio.Group>
-              </Form.Item>
-
-              {buildPositionMode === 'value' ? (
-                <>
-                  <Form.Item
-                    label="持有市值"
-                    name="holding_value"
-                    rules={[{ required: true, message: '请输入持有市值' }]}
-                  >
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      placeholder="请输入持有市值"
-                      min={0}
-                      onChange={handleValueModeCalculate}
-                    />
-                  </Form.Item>
-
-                  <Form.Item
-                    label="收益率 (%)"
-                    name="pnl_rate"
-                    rules={[{ required: true, message: '请输入收益率' }]}
-                  >
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      placeholder="请输入收益率"
-                      onChange={handleValueModeCalculate}
-                    />
-                  </Form.Item>
-                </>
-              ) : (
-                <>
-                  <Form.Item
-                    label="净值"
-                    name="nav"
-                    rules={[{ required: true, message: '请输入净值' }]}
-                  >
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      placeholder="请输入净值"
-                      min={0}
-                      onChange={handleNavModeCalculate}
-                    />
-                  </Form.Item>
-
-                  <Form.Item
-                    label="份额"
-                    name="share"
-                    rules={[{ required: true, message: '请输入份额' }]}
-                  >
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      placeholder="请输入份额"
-                      min={0}
-                      onChange={handleNavModeCalculate}
-                    />
-                  </Form.Item>
-                </>
-              )}
-
               <Form.Item
-                label="金额（自动计算）"
+                label="金额"
                 name="amount"
                 rules={[{ required: true, message: '请输入金额' }]}
               >
                 <InputNumber
                   style={{ width: '100%' }}
-                  placeholder="自动计算"
+                  placeholder="请输入金额"
                   min={0}
-                  disabled={buildPositionMode === 'value'}
-                />
-              </Form.Item>
-
-              {buildPositionMode === 'value' && (
-                <>
-                  <Form.Item
-                    label="份额（自动计算）"
-                    name="share"
-                  >
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      placeholder="自动计算"
-                      disabled
-                    />
-                  </Form.Item>
-
-                  <Form.Item
-                    label="净值（自动计算）"
-                    name="nav"
-                  >
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      placeholder="自动计算"
-                      disabled
-                    />
-                  </Form.Item>
-                </>
-              )}
-            </>
-          )}
-
-          {operationType === 'SELL' && (
-            <>
-              <Form.Item
-                label="份额"
-                name="share"
-                rules={[{ required: true, message: '请输入份额' }]}
-              >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  placeholder="请输入份额"
-                  min={0}
-                  onChange={handleSellCalculate}
+                  onChange={handleOperationBuyCalculate}
                 />
               </Form.Item>
 
@@ -869,19 +990,56 @@ const PositionsPage = () => {
                   style={{ width: '100%' }}
                   placeholder="请输入净值"
                   min={0}
-                  onChange={handleSellCalculate}
+                  onChange={handleOperationBuyCalculate}
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="份额（自动计算）"
+                name="share"
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="自动计算"
+                  disabled
+                />
+              </Form.Item>
+            </>
+          ) : (
+            <>
+              <Form.Item
+                label="份额"
+                name="share"
+                rules={[{ required: true, message: '请输入份额' }]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="请输入份额"
+                  min={0}
+                  onChange={handleOperationSellCalculate}
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="净值"
+                name="nav"
+                rules={[{ required: true, message: '请输入净值' }]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="请输入净值"
+                  min={0}
+                  onChange={handleOperationSellCalculate}
                 />
               </Form.Item>
 
               <Form.Item
                 label="金额（自动计算）"
                 name="amount"
-                rules={[{ required: true, message: '请输入金额' }]}
               >
                 <InputNumber
                   style={{ width: '100%' }}
                   placeholder="自动计算"
-                  min={0}
                   disabled
                 />
               </Form.Item>

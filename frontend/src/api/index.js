@@ -34,6 +34,7 @@ export const fundsAPI = {
   getEstimate: (code, source) => api.get(`/funds/${code}/estimate/`, { params: { source } }),
   getAccuracy: (code) => api.get(`/funds/${code}/accuracy/`),
   batchEstimate: (fundCodes) => api.post('/funds/batch_estimate/', { fund_codes: fundCodes }),
+  batchUpdateNav: (fundCodes) => api.post('/funds/batch_update_nav/', { fund_codes: fundCodes }),
 };
 
 // 账户管理

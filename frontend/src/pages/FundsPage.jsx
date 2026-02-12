@@ -76,8 +76,8 @@ const FundsPage = () => {
       setFunds(response.data.results);
       setTotal(response.data.count);
 
-      // 加载估值数据
-      await loadEstimates(response.data.results);
+      // 加载估值和净值数据
+      await loadEstimatesAndNavs(response.data.results);
     } catch (error) {
       message.error('加载基金列表失败');
     } finally {
@@ -85,29 +85,49 @@ const FundsPage = () => {
     }
   };
 
-  // 加载估值数据
-  const loadEstimates = async (fundList) => {
+  // 加载估值和净值数据
+  const loadEstimatesAndNavs = async (fundList) => {
     if (!fundList || fundList.length === 0) return;
 
     setEstimateLoading(true);
     try {
       const fundCodes = fundList.map((f) => f.fund_code);
-      const response = await fundsAPI.batchEstimate(fundCodes);
-      setEstimates(response.data);
+
+      // 并发获取估值和净值
+      const [estimatesResponse, navsResponse] = await Promise.all([
+        fundsAPI.batchEstimate(fundCodes),
+        fundsAPI.batchUpdateNav(fundCodes),
+      ]);
+
+      setEstimates(estimatesResponse.data);
       setLastUpdateTime(new Date());
+
+      // 更新基金列表中的净值
+      const updatedFunds = fundList.map(fund => {
+        const navData = navsResponse.data[fund.fund_code];
+        if (navData && !navData.error) {
+          return {
+            ...fund,
+            latest_nav: navData.latest_nav,
+            latest_nav_date: navData.latest_nav_date,
+          };
+        }
+        return fund;
+      });
+      setFunds(updatedFunds);
     } catch (error) {
-      console.error('获取估值数据失败:', error);
-      message.error('获取估值数据失败');
+      console.error('获取数据失败:', error);
+      message.error('获取数据失败');
     } finally {
       setEstimateLoading(false);
     }
   };
 
-  // 刷新估值
-  const handleRefreshEstimates = async () => {
+  // 刷新估值和净值
+  const handleRefresh = async () => {
     if (funds.length === 0) return;
-    await loadEstimates(funds);
-    message.success('估值数据已刷新');
+    await loadEstimatesAndNavs(funds);
+    message.success('数据已刷新');
   };
 
   useEffect(() => {
@@ -264,11 +284,11 @@ const FundsPage = () => {
           )}
           <Button
             icon={<ReloadOutlined />}
-            onClick={handleRefreshEstimates}
+            onClick={handleRefresh}
             loading={estimateLoading}
             size="small"
           >
-            刷新估值
+            刷新
           </Button>
         </Space>
       }

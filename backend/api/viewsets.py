@@ -231,6 +231,68 @@ class FundViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response(results)
 
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def batch_update_nav(self, request):
+        """
+        批量更新基金净值
+
+        请求体:
+        {
+            "fund_codes": ["000001", "000002", ...]
+        }
+
+        响应:
+        {
+            "000001": {
+                "fund_code": "000001",
+                "latest_nav": "1.2200",
+                "latest_nav_date": "2026-02-11"
+            },
+            ...
+        }
+        """
+        fund_codes = request.data.get('fund_codes', [])
+
+        if not fund_codes:
+            return Response({'error': '缺少 fund_codes 参数'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 查询数据库
+        funds = Fund.objects.filter(fund_code__in=fund_codes)
+        fund_map = {f.fund_code: f for f in funds}
+
+        results = {}
+        source = SourceRegistry.get_source('eastmoney')
+
+        # 并发获取净值
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(source.fetch_realtime_nav, code): code
+                      for code in fund_codes if code in fund_map}
+
+            for future in as_completed(futures):
+                code = futures[future]
+                try:
+                    data = future.result()
+                    fund = fund_map.get(code)
+
+                    if fund and data:
+                        # 更新数据库
+                        fund.latest_nav = data.get('nav')
+                        fund.latest_nav_date = data.get('nav_date')
+                        fund.save(update_fields=['latest_nav', 'latest_nav_date'])
+
+                        results[code] = {
+                            'fund_code': code,
+                            'latest_nav': str(data.get('nav')),
+                            'latest_nav_date': data.get('nav_date').isoformat() if data.get('nav_date') else None,
+                        }
+                except Exception as e:
+                    results[code] = {
+                        'fund_code': code,
+                        'error': f'获取净值失败: {str(e)}'
+                    }
+
+        return Response(results)
+
     @action(detail=False, methods=['post'], permission_classes=[IsAdminUser])
     def sync(self, request):
         """同步基金列表（管理员）"""
