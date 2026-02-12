@@ -3,7 +3,8 @@ import { Form, Input, Button, Card, message, Typography, Layout, theme } from 'a
 import { UserOutlined, LockOutlined, LoginOutlined, CloudServerOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { login } from '../api';
-import { setToken, setUser } from '../utils/auth';
+import { setToken } from '../utils/auth';
+import { useAuth } from '../contexts/AuthContext';
 
 const { Title, Text } = Typography;
 const { Content, Footer } = Layout;
@@ -12,6 +13,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const { token } = theme.useToken();
+  const { login: authLogin } = useAuth();
 
   const onFinish = async (values) => {
     setLoading(true);
@@ -20,7 +22,7 @@ function LoginPage() {
       const { access_token, refresh_token, user } = response.data;
 
       setToken(access_token, refresh_token);
-      setUser(user);
+      authLogin(user);
       message.success(`欢迎回来，${user.username}！`);
 
       navigate('/dashboard');

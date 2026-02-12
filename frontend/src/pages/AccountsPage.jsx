@@ -17,11 +17,17 @@ import {
   Col,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { accountsAPI } from '../api';
+import { useAccounts } from '../contexts/AccountContext';
 
 const AccountsPage = () => {
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const {
+    accounts,
+    loading,
+    loadAccounts,
+    createAccount,
+    updateAccount,
+    deleteAccount,
+  } = useAccounts();
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMode, setModalMode] = useState('create');
   const [currentAccount, setCurrentAccount] = useState(null);
@@ -30,35 +36,24 @@ const AccountsPage = () => {
   const [form] = Form.useForm();
 
   // 加载账户列表
-  const loadAccounts = async () => {
-    setLoading(true);
-    try {
-      const response = await accountsAPI.list();
-      setAccounts(response.data);
-
-      // 自动选中默认父账户
-      if (!selectedParentId) {
-        const defaultParent = response.data.find(a => a.is_default && !a.parent);
-        if (defaultParent) {
-          setSelectedParentId(defaultParent.id);
-        } else {
-          // 如果没有默认父账户，选择第一个父账户
-          const firstParent = response.data.find(a => !a.parent);
-          if (firstParent) {
-            setSelectedParentId(firstParent.id);
-          }
-        }
-      }
-    } catch (error) {
-      message.error('加载账户列表失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     loadAccounts();
-  }, []);
+  }, [loadAccounts]);
+
+  // 自动选中默认父账户
+  useEffect(() => {
+    if (!selectedParentId && accounts.length > 0) {
+      const defaultParent = accounts.find(a => a.is_default && !a.parent);
+      if (defaultParent) {
+        setSelectedParentId(defaultParent.id);
+      } else {
+        const firstParent = accounts.find(a => !a.parent);
+        if (firstParent) {
+          setSelectedParentId(firstParent.id);
+        }
+      }
+    }
+  }, [accounts, selectedParentId]);
 
   // 打开创建 Modal
   const handleCreate = () => {
@@ -86,15 +81,15 @@ const AccountsPage = () => {
       const values = await form.validateFields();
 
       if (modalMode === 'create') {
-        await accountsAPI.create(values);
+        await createAccount(values);
         message.success('创建账户成功');
       } else {
-        await accountsAPI.update(currentAccount.id, values);
+        await updateAccount(currentAccount.id, values);
         message.success('更新账户成功');
       }
 
       setModalVisible(false);
-      loadAccounts();
+      await loadAccounts(true); // 强制刷新
     } catch (error) {
       if (error.errorFields) {
         // 表单验证错误
@@ -107,9 +102,8 @@ const AccountsPage = () => {
   // 删除账户
   const handleDelete = async (id) => {
     try {
-      await accountsAPI.delete(id);
+      await deleteAccount(id);
       message.success('删除账户成功');
-      loadAccounts();
     } catch (error) {
       message.error('删除账户失败');
     }

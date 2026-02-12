@@ -20,10 +20,27 @@ import {
   AutoComplete,
 } from 'antd';
 import { RollbackOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons';
-import { accountsAPI, positionsAPI, fundsAPI } from '../api';
+import { positionsAPI, fundsAPI } from '../api';
+import { useAccounts } from '../contexts/AccountContext';
 
 const PositionsPage = () => {
-  const [accounts, setAccounts] = useState([]);
+  const {
+    accounts: allAccounts,
+    loading: accountsLoading,
+    loadAccounts,
+  } = useAccounts();
+
+  // 过滤出子账户
+  const accounts = allAccounts
+    .filter(a => a.parent !== null)
+    .map(child => {
+      const parent = allAccounts.find(a => a.id === child.parent);
+      return {
+        ...child,
+        parent_name: parent?.name || '',
+      };
+    });
+
   const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [positions, setPositions] = useState([]);
   const [operations, setOperations] = useState([]);
@@ -48,32 +65,16 @@ const PositionsPage = () => {
   const [searchKeyword, setSearchKeyword] = useState('');
 
   // 加载账户列表
-  const loadAccounts = async () => {
-    try {
-      const response = await accountsAPI.list();
-      const allAccounts = response.data;
-      const childAccounts = allAccounts.filter(a => a.parent !== null);
+  useEffect(() => {
+    loadAccounts();
+  }, [loadAccounts]);
 
-      // 给子账户添加父账户名称
-      const childAccountsWithParent = childAccounts.map(child => {
-        const parent = allAccounts.find(a => a.id === child.parent);
-        return {
-          ...child,
-          parent_name: parent?.name || '',
-        };
-      });
-
-      setAccounts(childAccountsWithParent);
-
-      // 默认选中第一个子账户
-      if (childAccountsWithParent.length > 0 && !selectedAccountId) {
-        setSelectedAccountId(childAccountsWithParent[0].id);
-      }
-    } catch (error) {
-      console.error('加载账户列表失败:', error);
-      message.error(error.response?.data?.message || '加载账户列表失败，请稍后重试');
+  // 默认选中第一个子账户
+  useEffect(() => {
+    if (accounts.length > 0 && !selectedAccountId) {
+      setSelectedAccountId(accounts[0].id);
     }
-  };
+  }, [accounts, selectedAccountId]);
 
   // 加载持仓列表
   const loadPositions = async (accountId) => {

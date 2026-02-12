@@ -10,6 +10,8 @@ import AccountsPage from './pages/AccountsPage';
 import PositionsPage from './pages/PositionsPage';
 import WatchlistsPage from './pages/WatchlistsPage';
 import { isAuthenticated } from './utils/auth';
+import { AuthProvider } from './contexts/AuthContext';
+import { AccountProvider } from './contexts/AccountContext';
 
 function PrivateRoute({ children }) {
   return isAuthenticated() ? children : <Navigate to="/" />;
@@ -18,81 +20,85 @@ function PrivateRoute({ children }) {
 function App() {
   return (
     <ConfigProvider locale={zhCN}>
-      <Router>
-        <Routes>
-          <Route
-            path="/"
-            element={
-              isAuthenticated() ? (
-                <Navigate to="/dashboard/funds" />
-              ) : (
-                <LoginPage />
-              )
-            }
-          />
-          <Route path="/initialize" element={<InitializePage />} />
-          <Route
-            path="/dashboard"
-            element={
-              <PrivateRoute>
-                <MainLayout>
-                  <Navigate to="/dashboard/funds" />
-                </MainLayout>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/dashboard/funds"
-            element={
-              <PrivateRoute>
-                <MainLayout>
-                  <FundsPage />
-                </MainLayout>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/dashboard/funds/:code"
-            element={
-              <PrivateRoute>
-                <MainLayout>
-                  <FundDetailPage />
-                </MainLayout>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/dashboard/accounts"
-            element={
-              <PrivateRoute>
-                <MainLayout>
-                  <AccountsPage />
-                </MainLayout>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/dashboard/positions"
-            element={
-              <PrivateRoute>
-                <MainLayout>
-                  <PositionsPage />
-                </MainLayout>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/dashboard/watchlists"
-            element={
-              <PrivateRoute>
-                <MainLayout>
-                  <WatchlistsPage />
-                </MainLayout>
-              </PrivateRoute>
-            }
-          />
-        </Routes>
-      </Router>
+      <AuthProvider>
+        <AccountProvider>
+          <Router>
+            <Routes>
+              <Route
+                path="/"
+                element={
+                  isAuthenticated() ? (
+                    <Navigate to="/dashboard/funds" />
+                  ) : (
+                    <LoginPage />
+                  )
+                }
+              />
+              <Route path="/initialize" element={<InitializePage />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <PrivateRoute>
+                    <MainLayout>
+                      <Navigate to="/dashboard/funds" />
+                    </MainLayout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/dashboard/funds"
+                element={
+                  <PrivateRoute>
+                    <MainLayout>
+                      <FundsPage />
+                    </MainLayout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/dashboard/funds/:code"
+                element={
+                  <PrivateRoute>
+                    <MainLayout>
+                      <FundDetailPage />
+                    </MainLayout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/dashboard/accounts"
+                element={
+                  <PrivateRoute>
+                    <MainLayout>
+                      <AccountsPage />
+                    </MainLayout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/dashboard/positions"
+                element={
+                  <PrivateRoute>
+                    <MainLayout>
+                      <PositionsPage />
+                    </MainLayout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/dashboard/watchlists"
+                element={
+                  <PrivateRoute>
+                    <MainLayout>
+                      <WatchlistsPage />
+                    </MainLayout>
+                  </PrivateRoute>
+                }
+              />
+            </Routes>
+          </Router>
+        </AccountProvider>
+      </AuthProvider>
     </ConfigProvider>
   );
 }

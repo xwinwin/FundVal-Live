@@ -8,7 +8,7 @@ import {
   UserOutlined,
   LogoutOutlined,
 } from '@ant-design/icons';
-import { getUser, logout } from '../utils/auth';
+import { useAuth } from '../contexts/AuthContext';
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -16,7 +16,7 @@ const { useBreakpoint } = Grid;
 const MainLayout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const user = getUser();
+  const { user, logout } = useAuth();
   const screens = useBreakpoint();
 
   // 判断是否为移动端（< 768px）
