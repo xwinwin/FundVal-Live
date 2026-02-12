@@ -60,7 +60,8 @@ const PositionsPage = () => {
         setSelectedAccountId(childAccountsWithParent[0].id);
       }
     } catch (error) {
-      message.error('加载账户列表失败');
+      console.error('加载账户列表失败:', error);
+      message.error(error.response?.data?.message || '加载账户列表失败，请稍后重试');
     }
   };
 
@@ -73,7 +74,8 @@ const PositionsPage = () => {
       const response = await positionsAPI.list(accountId);
       setPositions(response.data);
     } catch (error) {
-      message.error('加载持仓列表失败');
+      console.error('加载持仓列表失败:', error);
+      message.error(error.response?.data?.message || '加载持仓列表失败，请稍后重试');
     } finally {
       setLoading(false);
     }
@@ -93,7 +95,8 @@ const PositionsPage = () => {
       });
       setOperations(sorted);
     } catch (error) {
-      message.error('加载操作流水失败');
+      console.error('加载操作流水失败:', error);
+      message.error(error.response?.data?.message || '加载操作流水失败，请稍后重试');
     } finally {
       setOperationsLoading(false);
     }
@@ -150,16 +153,30 @@ const PositionsPage = () => {
     });
   };
 
-  // 格式化金额
+  // 格式化金额（千分位分隔）
   const formatMoney = (value) => {
     if (value === null || value === undefined) return '-';
-    return parseFloat(value).toFixed(2);
+    const num = parseFloat(value);
+    return num.toLocaleString('zh-CN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   };
 
   // 格式化百分比
   const formatPercent = (value) => {
     if (value === null || value === undefined) return '-';
     return `${(parseFloat(value) * 100).toFixed(2)}%`;
+  };
+
+  // 格式化日期
+  const formatDate = (date) => {
+    if (!date) return '-';
+    return new Date(date).toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).replace(/\//g, '-');
   };
 
   // 回滚操作
@@ -170,7 +187,8 @@ const PositionsPage = () => {
       loadPositions(selectedAccountId);
       loadOperations(selectedAccountId);
     } catch (error) {
-      message.error('回滚失败');
+      console.error('回滚失败:', error);
+      message.error(error.response?.data?.message || '回滚失败，请稍后重试');
     }
   };
 
@@ -210,7 +228,8 @@ const PositionsPage = () => {
       }));
       setFundOptions(options);
     } catch (error) {
-      message.error('搜索基金失败');
+      console.error('搜索基金失败:', error);
+      message.error(error.response?.data?.message || '搜索基金失败，请稍后重试');
     } finally {
       setSearchLoading(false);
     }
@@ -263,7 +282,11 @@ const PositionsPage = () => {
       if (error.errorFields) {
         return;
       }
-      message.error('操作添加失败');
+      console.error('操作添加失败:', error);
+      const errorMsg = error.response?.data?.message ||
+                       error.response?.data?.fund_code?.[0] ||
+                       '操作添加失败，请检查输入信息';
+      message.error(errorMsg);
     }
   };
 
@@ -332,6 +355,7 @@ const PositionsPage = () => {
       dataIndex: 'operation_date',
       key: 'operation_date',
       width: 120,
+      render: (date) => formatDate(date),
     },
     {
       title: '操作类型',
@@ -536,7 +560,15 @@ const PositionsPage = () => {
   if (accounts.length === 0) {
     return (
       <Card title="持仓查询">
-        <Empty description="请先创建子账户" />
+        <Empty
+          description={
+            <span>
+              暂无子账户
+              <br />
+              请先在账户管理页面创建子账户
+            </span>
+          }
+        />
       </Card>
     );
   }
@@ -612,7 +644,17 @@ const PositionsPage = () => {
           loading={loading}
           pagination={false}
           scroll={{ x: 'max-content' }}
-          locale={{ emptyText: '暂无持仓' }}
+          locale={{
+            emptyText: (
+              <Empty
+                description={
+                  fundTypeFilter === 'all'
+                    ? '暂无持仓，点击右上角「添加操作」开始记录'
+                    : `暂无${fundTypeFilter}型基金持仓`
+                }
+              />
+            ),
+          }}
         />
       </Card>
 
@@ -632,7 +674,11 @@ const PositionsPage = () => {
           loading={operationsLoading}
           pagination={false}
           scroll={{ x: 'max-content' }}
-          locale={{ emptyText: '暂无操作记录' }}
+          locale={{
+            emptyText: (
+              <Empty description="暂无操作记录，点击右上角「添加操作」开始记录" />
+            ),
+          }}
         />
       </Card>
 
