@@ -488,6 +488,11 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
         if account_id:
             queryset = queryset.filter(account_id=account_id)
 
+        # 按基金过滤
+        fund_code = self.request.query_params.get('fund_code')
+        if fund_code:
+            queryset = queryset.filter(fund__fund_code=fund_code)
+
         return queryset
 
     def list(self, request, *args, **kwargs):
