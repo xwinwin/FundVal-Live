@@ -49,28 +49,50 @@ jobs:
         working-directory: frontend
         run: npx cap sync android
 
-      - name: Build Android APK
+      - name: Create debug keystore
         working-directory: frontend/android
-        run: ./gradlew assembleRelease
+        run: |
+          mkdir -p ~/.android
+          keytool -genkey -v -keystore ~/.android/debug.keystore \
+            -storepass android -alias androiddebugkey -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
 
-      - name: Build Android AAB
+      - name: Build Android APK (Debug)
+        working-directory: frontend/android
+        run: ./gradlew assembleDebug
+
+      - name: Build Android APK (Release)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        working-directory: frontend/android
+        run: |
+          echo "storeFile=$HOME/.android/release.keystore" > key.properties
+          echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> key.properties
+          echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> key.properties
+          echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> key.properties
+
+          # 创建 release keystore
+          echo "${{ secrets.ANDROID_SIGNING_KEY }}" | base64 -d > $HOME/.android/release.keystore
+
+          ./gradlew assembleRelease
+
+      - name: Build Android AAB (Release)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         working-directory: frontend/android
         run: ./gradlew bundleRelease
 
-      - name: Sign APK
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: r0adkll/sign-android-release@v1
-        with:
-          releaseDirectory: frontend/android/app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-
-      - name: Upload APK artifact
+      - name: Upload Debug APK artifact
+        if: "!startsWith(github.ref, 'refs/tags/')"
         uses: actions/upload-artifact@v4
         with:
-          name: fundval-android-apk
+          name: fundval-android-debug-apk
+          path: frontend/android/app/build/outputs/apk/debug/*.apk
+
+      - name: Upload Release APK artifact
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: fundval-android-release-apk
           path: frontend/android/app/build/outputs/apk/release/*.apk
 
       - name: Upload AAB artifact
