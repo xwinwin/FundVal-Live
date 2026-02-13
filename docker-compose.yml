@@ -2,74 +2,121 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: fundval
-      POSTGRES_USER: fundval
-      POSTGRES_PASSWORD: fundval
+      POSTGRES_DB: ${POSTGRES_DB:-fundval}
+      POSTGRES_USER: ${POSTGRES_USER:-fundval}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fundval}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # 不暴露端口到宿主机，仅容器内通信（如需调试可取消注释）
+    # ports:
+    #   - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fundval"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fundval}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - fundval
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # 不暴露端口到宿主机，仅容器内通信
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - fundval
 
   backend:
     build: ./backend
     command: >
       sh -c "python manage.py migrate &&
-             gunicorn fundval.wsgi:application --bind 0.0.0.0:8000 --workers 4"
+             gunicorn fundval.wsgi:application --bind 0.0.0.0:8000 --workers 4 --access-logfile - --error-logfile -"
     volumes:
       - ./backend:/app
-    ports:
-      - "8000:8000"
+      - config_data:/app/config
     environment:
       - DB_TYPE=postgresql
-      - DEBUG=true
+      - POSTGRES_DB=${POSTGRES_DB:-fundval}
+      - POSTGRES_USER=${POSTGRES_USER:-fundval}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-fundval}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-only}
+      - DEBUG=${DEBUG:-false}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend,frontend}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - fundval
 
   celery-worker:
     build: ./backend
     command: celery -A fundval worker -l info
     volumes:
       - ./backend:/app
+      - config_data:/app/config
     environment:
       - DB_TYPE=postgresql
-      - DEBUG=true
+      - POSTGRES_DB=${POSTGRES_DB:-fundval}
+      - POSTGRES_USER=${POSTGRES_USER:-fundval}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-fundval}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-only}
+      - DEBUG=${DEBUG:-false}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - fundval
 
   celery-beat:
     build: ./backend
     command: celery -A fundval beat -l info
     volumes:
       - ./backend:/app
+      - config_data:/app/config
     environment:
       - DB_TYPE=postgresql
-      - DEBUG=true
+      - POSTGRES_DB=${POSTGRES_DB:-fundval}
+      - POSTGRES_USER=${POSTGRES_USER:-fundval}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-fundval}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-dev-only}
+      - DEBUG=${DEBUG:-false}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - fundval
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - fundval
 
 volumes:
   postgres_data:
+  config_data:
+
+networks:
+  fundval:
+    driver: bridge

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 from .config import config
 
@@ -21,12 +22,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-r@#*&-i@$qu30fm*60jvlu6g-d9j8lw*-q=w)s8tf^hwu-gzyj'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-only-change-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config.get('debug', True)
 
-ALLOWED_HOSTS = ['*']  # TODO: 生产环境需要配置
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
 
 # Application definition
@@ -85,11 +86,11 @@ if db_type == 'postgresql':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': db_config.get('name', 'fundval'),
-            'USER': db_config.get('user', 'fundval'),
-            'PASSWORD': db_config.get('password', 'fundval'),
-            'HOST': db_config.get('host', 'localhost'),
-            'PORT': db_config.get('port', 5432),
+            'NAME': os.environ.get('POSTGRES_DB', db_config.get('name', 'fundval')),
+            'USER': os.environ.get('POSTGRES_USER', db_config.get('user', 'fundval')),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', db_config.get('password', 'fundval')),
+            'HOST': os.environ.get('POSTGRES_HOST', db_config.get('host', 'localhost')),
+            'PORT': os.environ.get('POSTGRES_PORT', db_config.get('port', 5432)),
         }
     }
 else:
@@ -175,8 +176,8 @@ SIMPLE_JWT = {
 }
 
 # Celery 配置
-CELERY_BROKER_URL = 'redis://localhost:6379/0'  # 使用 Redis 作为消息队列
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'  # 使用 Redis 存储任务结果
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_CACHE_BACKEND = 'django-cache'  # 使用 Django 缓存
 CELERY_TIMEZONE = 'Asia/Shanghai'  # 时区设置
 CELERY_TASK_TRACK_STARTED = True  # 跟踪任务开始状态
