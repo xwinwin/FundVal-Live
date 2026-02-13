@@ -14,7 +14,22 @@ logger = logging.getLogger(__name__)
 class Command(BaseCommand):
     help = '从天天基金同步基金列表'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--if-empty',
+            action='store_true',
+            help='仅在数据库为空时同步',
+        )
+
     def handle(self, *args, **options):
+        if options['if_empty']:
+            fund_count = Fund.objects.count()
+            if fund_count > 0:
+                self.stdout.write(self.style.SUCCESS(
+                    f'数据库已有 {fund_count} 个基金，跳过同步'
+                ))
+                return
+
         self.stdout.write('开始同步基金列表...')
 
         source = SourceRegistry.get_source('eastmoney')

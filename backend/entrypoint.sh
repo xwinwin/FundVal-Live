@@ -27,5 +27,10 @@ echo "=========================================="
 python manage.py check_bootstrap
 echo "=========================================="
 
+# 首次启动自动同步基金数据
+echo "Checking fund data..."
+python manage.py sync_funds --if-empty
+echo "✓ Fund data check complete"
+
 # 启动应用
 exec "$@"
